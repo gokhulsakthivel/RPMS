@@ -1,0 +1,1231 @@
+/* ----------------------------------------------------------------------------
+ * RPMS — global styles
+ *
+ * Source of truth: design.md §3 (color tokens) + §2 (layout). Components MUST
+ * NOT hardcode hex values. If a new color is needed, declare a token here and
+ * reference it via `var(--token-name)`.
+ *
+ * Theme: dark only.
+ * -------------------------------------------------------------------------- */
+
+:root {
+  /* ---------- 3.1 Neutrals (dark theme) ------------------------------- */
+  --color-bg:              #0d1117;
+  --color-surface:         #161b22;
+  --color-surface-alt:     #1c222b;
+  --color-border:          #30363d;
+  --color-border-strong:   #4a5160;
+  --color-text:            #f0f6fc;
+  --color-text-muted:      #8b949e;
+  --color-text-disabled:   #6b7280;
+
+  /* ---------- 3.2 Brand & Action -------------------------------------- */
+  --color-primary:         #3b82f6;
+  --color-primary-hover:   #2563eb;
+  --color-primary-soft:    #1f2a44;
+
+  /* ---------- 3.3 Crew Status (the rest clock) ------------------------ */
+  --status-available-bg:   #dcfce7;
+  --status-available-text: #166534;
+  --status-resting-bg:     #fee2e2;
+  --status-resting-text:   #991b1b;
+  --rest-bar-ready:        #22c55e;
+  --rest-bar-resting:      #ef4444;
+  --rest-bar-track:        #30363d; /* = --color-border, keep in sync */
+
+  /* ---------- 3.4 Feedback -------------------------------------------- */
+  --color-success:         #22c55e;
+  --color-warning:         #f59e0b;
+  --color-danger:          #ef4444;
+  --color-danger-soft:     #3b1d20;
+
+  /* ---------- 3.5 Train Type Badges ----------------------------------- */
+  --accent-passenger-bg:    #dcfce7;
+  --accent-passenger-text:  #166534;
+  --accent-memu-bg:         #fef3c7;
+  --accent-memu-text:       #854d0e;
+  --accent-demu-bg:         #ccfbf1;
+  --accent-demu-text:       #115e59;
+  --accent-mail-express-bg: #dbeafe;
+  --accent-mail-express-text:#1e40af;
+  --accent-vande-bharat-bg: #ede9fe;
+  --accent-vande-bharat-text:#5b21b6;
+  --accent-amrit-bharat-bg: #fce7f3;
+  --accent-amrit-bharat-text:#9d174d;
+
+  /* ---------- Typography scale (design.md §2.1 references) ----------- */
+  --text-h1:      28px;
+  --text-h2:      20px;
+  --text-body:    14px;
+  --text-caption: 12px;
+
+  /* ---------- Layout constants --------------------------------------- */
+  --header-height: 48px;
+  --tabbar-height: 44px;
+  --page-max-width: 1200px;
+  --page-pad: 24px;
+
+  color-scheme: dark;
+}
+
+/* ---------- Reset --------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--color-text);
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-primary-hover);
+}
+
+/* ---------- App shell ---------------------------------------------------- */
+
+.app-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* Header — 48px sticky bar with title left, version + date picker right. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--page-pad);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.app-header__title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.app-header__subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.app-header__right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-header__version {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tab bar — outlined-pill nav */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--tabbar-height);
+  padding: 0 var(--page-pad);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.tab-bar__link {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.tab-bar__link:hover {
+  color: var(--color-text);
+}
+
+.tab-bar__link[aria-selected='true'] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+/* Page container */
+.app-page {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--page-max-width);
+  margin: 0 auto;
+  padding: var(--page-pad);
+}
+
+/* Date picker */
+.date-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-picker__label {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.date-picker__input {
+  height: 30px;
+  padding: 0 8px;
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-picker__input:focus {
+  outline: none;
+  border-color: var(--color-border-strong);
+}
+
+/* The native date-picker indicator is hard to read against a dark surface;
+ * invert it so the calendar glyph stays visible. */
+.date-picker__input::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
+
+/* ---------- Placeholder page styling (M6 only — replaced in M7) ---------- */
+
+.page-stub {
+  padding: 32px;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.page-stub h1 {
+  margin: 0 0 8px;
+  color: var(--color-text);
+  font-size: var(--text-h2);
+}
+
+.page-stub p {
+  margin: 0;
+  font-size: var(--text-body);
+}
+
+.page-stub code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--color-surface-alt);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--color-text);
+}
+
+/* ============================================================================
+ * M7 — Pages & Components
+ * ===========================================================================*/
+
+/* ---------- Visually-hidden helper (a11y) -------------------------------- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- PageHeader (components.md §4) -------------------------------- */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 4px 0 20px;
+}
+
+.page-header__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-header__title {
+  margin: 0;
+  font-size: var(--text-h1);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.page-header__subtitle {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+.page-header__action {
+  flex: 0 0 auto;
+}
+
+/* ---------- Button (primitives) ------------------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: var(--text-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease,
+    box-shadow 120ms ease;
+  white-space: nowrap;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn--default {
+  height: 32px;
+}
+
+.btn--cta {
+  height: 40px;
+  padding: 0 18px;
+  font-size: 15px;
+}
+
+.btn--full {
+  width: 100%;
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.btn--primary:hover:not([disabled]) {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.btn--secondary {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn--secondary:hover:not([disabled]) {
+  border-color: var(--color-border-strong);
+}
+
+.btn--danger {
+  background: transparent;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.btn--danger:hover:not([disabled]) {
+  background: var(--color-danger-soft);
+}
+
+.btn--text {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-muted);
+  padding: 0 6px;
+}
+
+.btn--text:hover:not([disabled]) {
+  color: var(--color-text);
+}
+
+/* ---------- IconButton --------------------------------------------------- */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.icon-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ---------- Badge / Chip (primitives) ------------------------------------ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+}
+
+.chip__role {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.chip__label {
+  color: var(--color-text);
+}
+
+/* ---------- Input / Select / DateTimeInput (primitives) ------------------ */
+.input,
+.select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+  font-size: var(--text-body);
+  font-family: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+.input--invalid,
+.select--invalid {
+  border-color: var(--color-danger);
+}
+
+.input--invalid:focus,
+.select--invalid:focus {
+  box-shadow: 0 0 0 3px var(--color-danger-soft);
+}
+
+.input--datetime {
+  font-variant-numeric: tabular-nums;
+}
+
+.input--datetime::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
+
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%238b949e' d='M6 8.5 1.5 4h9z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+/* ---------- FormField ---------------------------------------------------- */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field__label {
+  font-size: var(--text-caption);
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+}
+
+.form-field__required {
+  color: var(--color-danger);
+  margin-left: 2px;
+}
+
+.form-field__hint {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.form-field__error {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-danger);
+}
+
+/* ---------- Banner (feedback) ------------------------------------------- */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  margin-bottom: 16px;
+}
+
+.banner--error {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.banner--warning {
+  border-color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.banner--info {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.banner__copy {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.banner__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.banner__body {
+  font-size: var(--text-body);
+  color: var(--color-text);
+}
+
+/* ---------- Toast (feedback) -------------------------------------------- */
+.toast-viewport {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+  max-width: 360px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  animation: toast-in 160ms ease-out;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.toast--success {
+  border-color: var(--color-success);
+}
+
+.toast--error {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.toast--info {
+  border-color: var(--color-primary);
+}
+
+.toast__msg {
+  flex: 1 1 auto;
+  font-size: var(--text-body);
+  color: var(--color-text);
+}
+
+.toast__close {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.toast__close:hover {
+  color: var(--color-text);
+}
+
+/* ---------- EmptyState (feedback) --------------------------------------- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px;
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  gap: 8px;
+}
+
+.empty-state__icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+
+.empty-state__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.empty-state__desc {
+  margin: 0;
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+  max-width: 420px;
+}
+
+/* ---------- SkeletonRows (feedback) — no pulse per design.md §12 -------- */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.skeleton__row {
+  display: flex;
+  gap: 12px;
+}
+
+.skeleton__cell {
+  flex: 1 1 0;
+  height: 36px;
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+/* ---------- Modal / ConfirmDialog (overlay) ----------------------------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.modal--form { max-width: 480px; }
+.modal--assign { max-width: 560px; }
+
+.modal__head {
+  padding: 16px 20px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal__subtitle {
+  margin: 4px 0 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.modal__body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.modal__foot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.confirm-dialog__body {
+  margin: 0;
+  font-size: var(--text-body);
+  color: var(--color-text);
+  line-height: 1.55;
+}
+
+/* ---------- DataTable --------------------------------------------------- */
+.data-table {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.data-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table__caption {
+  caption-side: top;
+  text-align: left;
+  padding: 10px 14px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.data-table__th {
+  padding: 10px 12px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+.data-table__td {
+  padding: 12px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  font-size: var(--text-body);
+}
+
+.data-table tr:last-child .data-table__td {
+  border-bottom: none;
+}
+
+.data-table__th--left, .data-table__td--left { text-align: left; }
+.data-table__th--right, .data-table__td--right { text-align: right; }
+.data-table__th--center, .data-table__td--center { text-align: center; }
+
+.data-table-empty {
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+/* ---------- RestBar (data) — design.md §6 ------------------------------- */
+.rest-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rest-bar__track {
+  position: relative;
+  width: 100px;
+  height: 6px;
+  background: var(--rest-bar-track);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.rest-bar__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.rest-bar__fill--ready {
+  background: var(--rest-bar-ready);
+}
+
+.rest-bar__fill--resting {
+  background: var(--rest-bar-resting);
+}
+
+.rest-bar__label {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* ---------- StatCard / SummaryCards (chrome) ---------------------------- */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 16px var(--page-pad);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.summary-cards__err {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-danger);
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+.stat-card--warning {
+  border-color: var(--color-warning);
+}
+
+.stat-card--danger {
+  border-color: var(--color-danger);
+}
+
+.stat-card__label {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.stat-card__value {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card--warning .stat-card__value { color: var(--color-warning); }
+.stat-card--danger .stat-card__value { color: var(--color-danger); }
+
+.stat-card__hint {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* ---------- TrainTable / TrainTypeBadge --------------------------------- */
+.train-table__num {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.train-table__num-route {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.train-table__num-route-route {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.train-table__name {
+  color: var(--color-text);
+}
+
+.train-table__route {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.train-table__arrow {
+  color: var(--color-text-disabled);
+}
+
+.train-table__inward-num {
+  color: var(--color-text);
+  font-weight: 600;
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.train-table__time {
+  display: flex;
+  flex-direction: column;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.train-table__time-date {
+  white-space: nowrap;
+}
+
+.train-table__time-clock {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.train-table__crew {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.train-table__crew-empty {
+  color: var(--color-danger);
+  font-size: var(--text-caption);
+}
+
+.train-table__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.train-table__runs-on {
+  display: inline-flex;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.train-table__runs-on-day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.train-table__runs-on-day--on {
+  background: var(--color-accent-soft, rgba(0, 120, 255, 0.12));
+  color: var(--color-accent, #0078ff);
+}
+
+.train-table__runs-on-day--off {
+  color: var(--color-text-disabled);
+}
+
+/* ---------- TrainForm --------------------------------------------------- */
+.train-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.train-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ---------- CrewTable / CrewGradeBadge / CrewEligibleForCell ----------- */
+.crew-table__name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.crew-table__role {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.crew-table__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.crew-grade__none {
+  color: var(--color-text-disabled);
+}
+
+.crew-eligible {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+/* ---------- CrewForm ---------------------------------------------------- */
+.crew-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.crew-form__role {
+  display: flex;
+  gap: 12px;
+}
+
+.crew-form__role-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-alt);
+  cursor: pointer;
+  font-size: var(--text-body);
+}
+
+.crew-form__role-opt input[type='radio'] {
+  accent-color: var(--color-primary);
+}
+
+.crew-form__role-locked {
+  margin: 4px 0 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+
+.crew-form__checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--color-surface-alt);
+}
+
+.crew-form__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-body);
+  cursor: pointer;
+}
+
+.crew-form__check input[type='checkbox'] {
+  accent-color: var(--color-primary);
+}
+
+.crew-form__signoff {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crew-form__signoff > :first-child {
+  flex: 1 1 auto;
+}
+
+/* ---------- AssignmentTable -------------------------------------------- */
+.assign-table__train {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assign-table__num {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.assign-table__name {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.assign-table__time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.assign-table__crew {
+  color: var(--color-text);
+}
+
+.assign-table__crew--missing {
+  color: var(--color-danger);
+}
+
+.assign-table__crew--na {
+  color: var(--color-text-disabled);
+  font-style: italic;
+}
+
+/* ---------- AssignCrewModal -------------------------------------------- */
+.assign-modal__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.assign-modal__time {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.assign-modal__loading {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.assign-modal__no-alp {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ---------- HiddenCrewFootnote ----------------------------------------- */
+.hidden-footnote {
+  margin: 8px 0 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-style: italic;
+}

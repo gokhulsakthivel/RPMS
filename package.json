@@ -1,0 +1,39 @@
+{
+  "name": "rpms",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Railway People Management System — local-only LP/ALP assignment app.",
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"tsx watch src/api/server.ts\" \"vite\"",
+    "dev:api": "tsx watch src/api/server.ts",
+    "dev:web": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "csv-parse": "^5",
+    "csv-stringify": "^6",
+    "express": "^4",
+    "proper-lockfile": "^4",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-router-dom": "^6",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "@types/express": "^4",
+    "@types/node": "^20",
+    "@types/proper-lockfile": "^4",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^4",
+    "concurrently": "^9",
+    "tsx": "^4",
+    "typescript": "^5",
+    "vite": "^5"
+  },
+  "overrides": {
+    "@types/mime": "file:./stubs/types-mime"
+  }
+}

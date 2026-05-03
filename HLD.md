@@ -1,14 +1,15 @@
 # Railway People Management System (RPMS) — High-Level Design
 
 ## 1. Overview
-RPMS is a people management system for Indian Railways that handles the assignment of **Loco Pilots (LP)** and **Assistant Loco Pilots (ALP)** to trains. The system enforces eligibility, rest, and hierarchy rules to ensure only qualified crew are scheduled for each train type.
+RPMS is a people management system for Indian Railways that handles the assignment of **Loco Pilots (LP)** and **Assistant Loco Pilots (ALP)** to trains. The system enforces eligibility and rest rules to ensure only qualified crew are scheduled for each train type.
 
 The HLD captures the **what** and **why** — the domain, business rules, workflows, and scope. For the **how** (data models, function signatures, error contracts, tests), see [`LLD.md`](./LLD.md).
 
 ## 2. Domain Glossary
-- **LP (Loco Pilot)**: The primary driver of a train. Two categories exist:
-  - **Mail Express LP** — higher rank
-  - **Passenger LP** — lower rank
+- **LP (Loco Pilot)**: The primary driver of a train. Two role categories exist:
+  - **Mail Express LP**
+  - **Passenger LP**
+  > `category` is a **role label** — it does not gate eligibility. Eligibility is fully data-driven via `eligibleTrainTypes` (see §4.2).
 - **ALP (Assistant Loco Pilot)**: Assists the LP. Required on most trains, but **NOT** on MEMU and DEMU.
 - **Train Types**: `Passenger`, `MEMU` (Mainline Electric Multiple Unit), `DEMU` (Diesel Electric Multiple Unit), `Mail Express`, `Vande Bharat`, `Amrit Bharat`.
 - **Sign-On**: When the crew goes on duty — the onward train's `departureTime`.
@@ -36,27 +37,19 @@ The HLD captures the **what** and **why** — the domain, business rules, workfl
 | MEMU            | Yes         | **No**       |
 | DEMU            | Yes         | **No**       |
 
-### 4.2 LP Eligibility (Hierarchy Rule)
-The hierarchy is **Mail Express LP (higher) > Passenger LP (lower)**.
-- A **Passenger LP** can work on: `Passenger` AND `Mail Express` trains (and any specialty type listed in their `eligibleTrainTypes`).
-- A **Mail Express LP** **cannot** work on `Passenger` trains (higher rank does not step down to lower-rank duty).
+### 4.2 LP Eligibility (Data-Driven)
+An LP is eligible to drive a train iff the train's type appears in the LP's `eligibleTrainTypes` list. There is **no implicit hierarchy** — every drivable train type is listed explicitly per LP.
 
-Eligibility matrix (source of truth):
+| Train Type    | LP eligible?                |
+|---------------|-----------------------------|
+| Passenger     | If in `eligibleTrainTypes`  |
+| Mail Express  | If in `eligibleTrainTypes`  |
+| MEMU          | If in `eligibleTrainTypes`  |
+| DEMU          | If in `eligibleTrainTypes`  |
+| Vande Bharat  | If in `eligibleTrainTypes`  |
+| Amrit Bharat  | If in `eligibleTrainTypes`  |
 
-| Train Type      | Passenger LP eligible?            | Mail Express LP eligible?         |
-|-----------------|-----------------------------------|-----------------------------------|
-| Passenger       | ✅ (by category)                  | ❌ (hierarchy rule)               |
-| Mail Express    | ✅ (by category)                  | ✅ (by category)                  |
-| MEMU            | If in `eligibleTrainTypes`        | If in `eligibleTrainTypes`        |
-| DEMU            | If in `eligibleTrainTypes`        | If in `eligibleTrainTypes`        |
-| Vande Bharat    | If in `eligibleTrainTypes`        | If in `eligibleTrainTypes`        |
-| Amrit Bharat    | If in `eligibleTrainTypes`        | If in `eligibleTrainTypes`        |
-
-> **Two eligibility mechanisms, by design:**
-> - `Passenger` and `Mail Express` eligibility is derived from `category` via the hierarchy rule (in code — see `isLpEligible`). It is **not** stored in `eligibleTrainTypes`.
-> - All other train types are specialty certifications, listed per-LP in `eligibleTrainTypes`.
->
-> This split keeps the counter-intuitive hierarchy rule in one place and prevents accidental violations via data edits.
+> `LpCategory` (`MAIL_EXPRESS` / `PASSENGER`) is retained as a **role label** for the UI and analytics; it does **not** participate in the eligibility decision. To grant or revoke eligibility for any train type — including `Passenger` and `Mail Express` — edit `eligibleTrainTypes`. The single source of truth is `isLpEligible`.
 
 ### 4.3 Rest Rule (16 hours)
 A crew member (LP or ALP) is **only assignable** if:
@@ -100,7 +93,7 @@ trainDepartureTime - lastSignOffTime >= 16 hours
 1. Operator selects a train. The train carries both `departureTime` and `inwardArrivalTime`. Archived trains are not selectable.
 2. System reads `inwardArrivalTime` from the train (no computation needed).
 3. System filters the LP pool (active, non-archived) by:
-   - Eligibility for the train type (hierarchy + `eligibleTrainTypes`).
+   - Eligibility for the train type (`train.type ∈ lp.eligibleTrainTypes`).
    - Rest rule: `train.departureTime - lp.lastSignOffTime >= 16h`.
    - Window-overlap rule (§4.6): no active assignment with an overlapping `[departureTime, signOffTime]` window.
 4. If the train requires an ALP, system filters the ALP pool (active, non-archived) by:
@@ -142,7 +135,7 @@ trainDepartureTime - lastSignOffTime >= 16 hours
            │
 ┌──────────▼──────────┐
 │  Domain Layer       │  ← LP/ALP/Train/Assignment, invariants
-│  (rules + entities) │     (eligibility, rest, hierarchy)
+│  (rules + entities) │     (eligibility, rest, window-overlap)
 └──────────┬──────────┘
            │
 ┌──────────▼──────────┐

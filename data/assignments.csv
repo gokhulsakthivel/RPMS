@@ -1,1 +1,1 @@
-id,trainId,lpId,alpId,departureTime,signOffTime,createdAt
+id,trainId,runDate,lpId,alpId,departureTime,signOffTime,createdAt,archivedAt

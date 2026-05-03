@@ -16,8 +16,8 @@ enum TrainType {
 }
 
 enum LpCategory {
-  MAIL_EXPRESS = 'MAIL_EXPRESS', // higher rank
-  PASSENGER    = 'PASSENGER',    // lower rank
+  MAIL_EXPRESS = 'MAIL_EXPRESS', // role label only — NOT used in eligibility
+  PASSENGER    = 'PASSENGER',    // role label only — NOT used in eligibility
 }
 ```
 
@@ -34,10 +34,10 @@ const MIN_REST_HOURS = 16;
 interface LocoPilot {
   id: string;
   name: string;
-  category: LpCategory;
-  // Specialty certifications only: MEMU, DEMU, VANDE_BHARAT, AMRIT_BHARAT.
-  // PASSENGER and MAIL_EXPRESS eligibility is derived from `category` via the
-  // hierarchy rule in `isLpEligible` and MUST NOT appear in this list.
+  category: LpCategory;          // role label only — eligibility ignores this
+  // Train types this LP is certified to drive — source of truth for
+  // eligibility (see `isLpEligible`). MAY include any of the six TrainType
+  // values, including PASSENGER and MAIL_EXPRESS.
   eligibleTrainTypes: TrainType[];
   lastSignOffTime?: Date;        // UTC; undefined for brand-new crew
   archivedAt?: Date;             // UTC; undefined for active rows
@@ -98,22 +98,10 @@ function requiresAlp(trainType: TrainType): boolean {
 ### 3.2 LP Eligibility
 ```ts
 function isLpEligible(lp: LocoPilot, trainType: TrainType): boolean {
-  // Hierarchy rule (counter-intuitive — DO NOT "fix"):
-  // Mail Express LP is the HIGHER rank and CANNOT take Passenger duty.
-  // Passenger LP is the LOWER rank and CAN take both Passenger and Mail Express duty.
-  // PASSENGER / MAIL_EXPRESS eligibility lives here, NOT in lp.eligibleTrainTypes,
-  // so admins editing the CSV cannot accidentally violate the hierarchy rule.
-  switch (trainType) {
-    case TrainType.PASSENGER:
-      return lp.category === LpCategory.PASSENGER;
-    case TrainType.MAIL_EXPRESS:
-      return true; // both categories eligible
-    case TrainType.MEMU:
-    case TrainType.DEMU:
-    case TrainType.VANDE_BHARAT:
-    case TrainType.AMRIT_BHARAT:
-      return lp.eligibleTrainTypes.includes(trainType);
-  }
+  // Eligibility is fully data-driven. The LP's `eligibleTrainTypes` list IS
+  // the drivable set — including PASSENGER and MAIL_EXPRESS. `LpCategory` is
+  // a role label only and does not participate in this decision.
+  return lp.eligibleTrainTypes.includes(trainType);
 }
 ```
 
@@ -171,7 +159,7 @@ function assignCrew(input: {
 }): Result<Assignment, AssignmentError> {
   // 0. Reject archived inputs                          → ARCHIVED_ENTITY
   //    (any of train, lp, alp has archivedAt set)
-  // 1. Check LP eligibility (isLpEligible)             → LP_NOT_ELIGIBLE / CERTIFICATION_MISSING
+  // 1. Check LP eligibility (isLpEligible)             → LP_NOT_ELIGIBLE
   // 2. Check LP rest (hasSufficientRest)               → LP_REST_VIOLATION
   // 3. Check LP window overlap (hasWindowConflict)     → LP_WINDOW_CONFLICT
   // 4. If requiresAlp(train.type):
@@ -194,7 +182,7 @@ Errors are **structured** so the UI can render actionable messages. Never throw 
 
 ```ts
 type AssignmentError =
-  | { code: 'LP_NOT_ELIGIBLE'; lpId: string; lpCategory: LpCategory; trainType: TrainType }
+  | { code: 'LP_NOT_ELIGIBLE'; lpId: string; trainType: TrainType }
   | { code: 'LP_REST_VIOLATION'; lpId: string; requiredHours: number; actualHours: number }
   | { code: 'LP_WINDOW_CONFLICT'; lpId: string; conflictingAssignmentId: string }
   | { code: 'ALP_NOT_ELIGIBLE'; alpId: string; trainType: TrainType }
@@ -202,12 +190,10 @@ type AssignmentError =
   | { code: 'ALP_WINDOW_CONFLICT'; alpId: string; conflictingAssignmentId: string }
   | { code: 'ALP_REQUIRED_BUT_MISSING'; trainType: TrainType }
   | { code: 'ALP_NOT_ALLOWED'; trainType: TrainType }            // MEMU/DEMU
-  | { code: 'CERTIFICATION_MISSING'; lpId: string; trainType: TrainType }
   | { code: 'ARCHIVED_ENTITY'; entity: 'TRAIN' | 'LP' | 'ALP'; id: string };
 ```
 
-- `LP_NOT_ELIGIBLE` covers the hierarchy rule (e.g., Mail Express LP attempting Passenger duty).
-- `CERTIFICATION_MISSING` covers an LP attempting a specialty type (MEMU/DEMU/VB/AB) not present in their `eligibleTrainTypes`.
+- `LP_NOT_ELIGIBLE` covers any LP whose `eligibleTrainTypes` does not include the train's type (covers all six train types — there is no separate hierarchy/cert split).
 - `ALP_NOT_ELIGIBLE` covers an ALP whose `eligibleTrainTypes` does not include the train's type.
 - `LP_WINDOW_CONFLICT` / `ALP_WINDOW_CONFLICT` cover the no-double-booking rule ([HLD §4.6](./HLD.md#46-window-overlap-rule-no-double-booking)).
 - `ARCHIVED_ENTITY` is raised when `assignCrew` is called against any archived row.
@@ -266,7 +252,7 @@ id,name,category,eligibleTrainTypes,lastSignOffTime,archivedAt
 | `id`                 | string   | PK, prefix `LP_` |
 | `name`               | string   | |
 | `category`           | enum     | `LpCategory` |
-| `eligibleTrainTypes` | pipe-list| Specialty certs only: `MEMU`, `DEMU`, `VANDE_BHARAT`, `AMRIT_BHARAT`. Empty if none. |
+| `eligibleTrainTypes` | pipe-list| Source of truth for eligibility. May contain any of the six TrainType values, including `PASSENGER` and `MAIL_EXPRESS`. Empty if none. |
 | `lastSignOffTime`    | ISO-UTC  | Empty for brand-new crew |
 | `archivedAt`         | ISO-UTC  | Empty for active rows |
 
@@ -362,7 +348,7 @@ interface AssignmentRepo {
 - **CSV is the system of record.** Never bypass the repository layer to read or write `data/*.csv` directly from application code.
 - **CSV writes are whole-file, atomic (temp + rename), and serialized.** No partial-row updates.
 - **CSV column order is part of the contract.** Loaders must assert headers match §5.3 exactly and fail fast on mismatch.
-- **Hierarchy rule lives in `isLpEligible`, not in data.** `PASSENGER` and `MAIL_EXPRESS` must never appear in `loco_pilots.csv:eligibleTrainTypes`. `MEMU` and `DEMU` must never appear in `assistant_loco_pilots.csv:eligibleTrainTypes`. The CSV loader rejects rows that violate this.
+- **LP eligibility is data-driven via `eligibleTrainTypes`.** Any of the six `TrainType` values may appear, including `PASSENGER` and `MAIL_EXPRESS`. `LpCategory` is a role label only — it does not gate eligibility. `MEMU` and `DEMU` must never appear in `assistant_loco_pilots.csv:eligibleTrainTypes`; the CSV loader rejects ALP rows that violate this.
 - **Soft archive only — never `DELETE`.** Repository implementations expose `archive(id)`, never `delete(id)`. All `list*` calls default to `archivedAt IS NULL`. Bypassing the repo to remove rows from the CSV by hand corrupts the audit trail and is forbidden.
 - **Train numbers are unique forever.** The CSV loader rejects two rows with the same `Train.number`, regardless of `archivedAt`. A retired train number does **not** become available for re-use.
 - **Window-overlap is a domain rule, not a UI concern.** The `assignCrew` orchestrator must enforce it ([§3.5](#35-window-overlap)) using only **active** assignments returned by `AssignmentRepo`. UI dropdown filtering is a convenience that must agree with this rule, never override it.
@@ -370,7 +356,6 @@ interface AssignmentRepo {
 ## 7. Notes for AI Agents Working on This Repo
 - When adding a new train type: update `TrainType` enum → eligibility matrix in `isLpEligible` → `isAlpEligible` (decide if ALPs serve it) → `requiresAlp` → CSV loader validation, in that order.
 - When changing the rest window from 16 hours: edit only `MIN_REST_HOURS`. Never search-and-replace the literal `16`.
-- The hierarchy rule (higher LP cannot do lower-LP work) is **counter-intuitive**. The comment near `isLpEligible` exists so future contributors don't "fix" it. Leave it in.
-- `PASSENGER`/`MAIL_EXPRESS` eligibility for LP is **derived from `category`**, not stored in `eligibleTrainTypes`. Do not "normalize" by flattening it into the data column.
+- LP eligibility is fully **data-driven**: the per-LP `eligibleTrainTypes` list IS the drivable set. `LpCategory` is a role label only and must not be re-introduced into the eligibility decision.
 - New rules go in the domain layer first, then surface through the application layer, then the UI. Never the other way around.
 - CSV is the system of record. Never read/write `data/*.csv` outside the repository layer. All writes go through the temp-file + rename pattern under the single-writer lock.

@@ -1,0 +1,388 @@
+// Zod schemas shared by frontend (form validation) and backend
+// (request-body validation). One source of truth keeps the two in lockstep
+// per techstack.md §2.
+//
+// Wire format: timestamps travel as ISO-8601 strings; the schemas transform
+// them into JS `Date` objects so the orchestrator and repos see real
+// `Date` instances.
+
+import { z } from 'zod';
+import { DayOfWeek, LpCategory, TrainType } from '../domain/types';
+
+// ---------------------------------------------------------------------------
+// Primitives
+// ---------------------------------------------------------------------------
+
+/** ISO-8601 UTC timestamp, parsed into a `Date`. */
+const isoUtcDate = z
+  .string()
+  .datetime({ offset: true })
+  .transform((s) => new Date(s));
+
+/** `YYYY-MM-DD` calendar date used by the `?date=` query param. */
+const isoCalendarDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
+
+/** Native enum schemas for the two domain enums. */
+const trainTypeSchema = z.nativeEnum(TrainType);
+const lpCategorySchema = z.nativeEnum(LpCategory);
+const dayOfWeekSchema = z.nativeEnum(DayOfWeek);
+
+/**
+ * IST time-of-day, 24h `HH:MM`. Used by the recurring train schedule (M9):
+ * `departureTimeOfDay` and `inwardArrivalTimeOfDay`. The orchestrator
+ * materializes these into absolute UTC instants per run-date via
+ * `runSchedule.materializeRun`.
+ */
+const timeOfDaySchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'expected HH:MM (24h)');
+
+/** Non-empty trimmed string for names, station codes, etc. */
+const nonEmptyString = z.string().trim().min(1);
+
+// ---------------------------------------------------------------------------
+// Train — create / update
+// ---------------------------------------------------------------------------
+
+/**
+ * `runsOnDays` is a non-empty subset of `DayOfWeek`. Duplicates are rejected
+ * because they encode no extra meaning and would silently bloat the CSV row.
+ */
+const runsOnDaysSchema = z
+  .array(dayOfWeekSchema)
+  .min(1, 'runsOnDays must contain at least one day')
+  .refine((arr) => new Set(arr).size === arr.length, {
+    message: 'runsOnDays must not contain duplicate days',
+  });
+
+/**
+ * Inward-arrival day offset relative to the run's departure date.
+ * 0 = same IST day, 1 = next day (overnight train), 2 = +2 days, 3 = +3 days.
+ * Capped at 3 because no real Indian Railways run exceeds that envelope.
+ */
+const inwardArrivalDayOffsetSchema = z
+  .number()
+  .int('inwardArrivalDayOffset must be an integer')
+  .min(0, 'inwardArrivalDayOffset must be ≥ 0')
+  .max(3, 'inwardArrivalDayOffset must be ≤ 3');
+
+const trainCreateBase = z.object({
+  number: nonEmptyString,
+  name: nonEmptyString,
+  type: trainTypeSchema,
+  onwardFromStation: nonEmptyString,
+  onwardToStation: nonEmptyString,
+  runsOnDays: runsOnDaysSchema,
+  departureTimeOfDay: timeOfDaySchema,
+  inwardTrainNumber: nonEmptyString,
+  inwardFromStation: nonEmptyString,
+  inwardToStation: nonEmptyString,
+  inwardArrivalTimeOfDay: timeOfDaySchema,
+  inwardArrivalDayOffset: inwardArrivalDayOffsetSchema,
+});
+
+/**
+ * No cross-field refinement here. The "arrival strictly after departure"
+ * invariant is checked per-run by `runSchedule.materializeRun` because the
+ * absolute UTC window depends on the run date. A schedule like
+ * `dep=22:00, arr=06:00, offset=1` is valid even though `06:00 < 22:00`
+ * as wall-clock strings.
+ */
+export const TrainCreateInput = trainCreateBase;
+export type TrainCreateInput = z.infer<typeof TrainCreateInput>;
+
+/** All fields optional for PUT. */
+export const TrainUpdateInput = trainCreateBase.partial();
+export type TrainUpdateInput = z.infer<typeof TrainUpdateInput>;
+
+// ---------------------------------------------------------------------------
+// Loco Pilot — create / update
+// ---------------------------------------------------------------------------
+
+/**
+ * LP `eligibleTrainTypes` is the source of truth for eligibility. Any of the
+ * six TrainType values may appear — including `PASSENGER` and `MAIL_EXPRESS`.
+ * `category` is a label only and does not constrain this list. See HLD §4.2.
+ */
+const lpEligibleTrainTypes = z.array(trainTypeSchema);
+
+export const LocoPilotCreateInput = z.object({
+  name: nonEmptyString,
+  category: lpCategorySchema,
+  eligibleTrainTypes: lpEligibleTrainTypes,
+});
+export type LocoPilotCreateInput = z.infer<typeof LocoPilotCreateInput>;
+
+/**
+ * Update accepts everything optional. `lastSignOffTime` is exposed here as
+ * the **manual override** path documented in HLD §4.7 — used by the Edit
+ * Crew flow. Not present on Create.
+ */
+export const LocoPilotUpdateInput = z.object({
+  name: nonEmptyString.optional(),
+  category: lpCategorySchema.optional(),
+  eligibleTrainTypes: lpEligibleTrainTypes.optional(),
+  lastSignOffTime: isoUtcDate.nullable().optional(),
+});
+export type LocoPilotUpdateInput = z.infer<typeof LocoPilotUpdateInput>;
+
+// ---------------------------------------------------------------------------
+// Assistant Loco Pilot — create / update
+// ---------------------------------------------------------------------------
+
+/**
+ * ALPs are NEVER assigned to MEMU or DEMU — those types must not appear in
+ * `eligibleTrainTypes`. See HLD §4.5 / LLD §6 standard.
+ */
+const alpEligibleTrainTypes = z
+  .array(trainTypeSchema)
+  .refine(
+    (types) =>
+      !types.includes(TrainType.MEMU) && !types.includes(TrainType.DEMU),
+    {
+      message:
+        'eligibleTrainTypes must not include MEMU or DEMU — ALPs are not assigned to those train types',
+    },
+  );
+
+export const AlpCreateInput = z.object({
+  name: nonEmptyString,
+  eligibleTrainTypes: alpEligibleTrainTypes,
+});
+export type AlpCreateInput = z.infer<typeof AlpCreateInput>;
+
+export const AlpUpdateInput = z.object({
+  name: nonEmptyString.optional(),
+  eligibleTrainTypes: alpEligibleTrainTypes.optional(),
+  lastSignOffTime: isoUtcDate.nullable().optional(),
+});
+export type AlpUpdateInput = z.infer<typeof AlpUpdateInput>;
+
+// ---------------------------------------------------------------------------
+// Assignment — create
+// ---------------------------------------------------------------------------
+
+/**
+ * The orchestrator looks up the train, LP, and (optional) ALP from these IDs,
+ * materializes the recurring schedule against `runDate`, and runs
+ * `assignCrew`. The body intentionally does NOT carry departure or
+ * sign-off times — those are derived server-side from the train schedule
+ * per HLD §4.4 and M9 plan §6.
+ */
+export const AssignCrewInput = z.object({
+  trainId: nonEmptyString,
+  /** IST calendar date (`YYYY-MM-DD`) selecting which run of the train. */
+  runDate: isoCalendarDate,
+  lpId: nonEmptyString,
+  alpId: nonEmptyString.optional(),
+});
+export type AssignCrewInput = z.infer<typeof AssignCrewInput>;
+
+// ---------------------------------------------------------------------------
+// Query params
+// ---------------------------------------------------------------------------
+
+export const DateQuery = z.object({ date: isoCalendarDate });
+export type DateQuery = z.infer<typeof DateQuery>;
+
+/**
+ * Eligible-crew query. `runDate` is required because rest and window
+ * checks anchor on the materialized UTC departure for that specific run
+ * of the recurring schedule (M9).
+ */
+export const TrainIdQuery = z.object({
+  trainId: nonEmptyString,
+  runDate: isoCalendarDate,
+});
+export type TrainIdQuery = z.infer<typeof TrainIdQuery>;
+
+// ---------------------------------------------------------------------------
+// Response shapes — server → client. Documented here so the SPA imports
+// types and never re-derives them.
+// ---------------------------------------------------------------------------
+
+export interface TrainRow {
+  id: string;
+  number: string;
+  name: string;
+  type: TrainType;
+  onwardFromStation: string;
+  onwardToStation: string;
+  /**
+   * The IST run-date this row is materialized against (`YYYY-MM-DD`).
+   * The list endpoint produces one row per train per selected date.
+   */
+  runDate: string;
+  /** Days the recurring train operates. Drives the "Runs on" cell (M9). */
+  runsOnDays: DayOfWeek[];
+  /** Raw IST departure time-of-day, `HH:MM`. The form hydrates from this. */
+  departureTimeOfDay: string;
+  /** Raw IST inward-arrival time-of-day, `HH:MM`. */
+  inwardArrivalTimeOfDay: string;
+  /** 0 = same day, 1 = next day, ... */
+  inwardArrivalDayOffset: number;
+  /** Materialized ISO-8601 UTC departure for `runDate`. */
+  departureTime: string;
+  inwardTrainNumber: string;
+  inwardFromStation: string;
+  inwardToStation: string;
+  /** Materialized ISO-8601 UTC inward arrival for `runDate`. */
+  inwardArrivalTime: string;
+}
+
+/**
+ * The server-projected row used by the unified Crew table (design.md §9.2).
+ * The UI never recomputes any of these fields.
+ */
+export interface CrewRow {
+  id: string;
+  kind: 'LP' | 'ALP';
+  name: string;
+  /**
+   * Highest-rank drivable type by the design.md §9.2 hierarchy ordering.
+   * `null` only for ALPs with no certifications (a brand-new ALP). The
+   * "All types" UX appears in `eligibleForLabel`, not here.
+   */
+  grade: TrainType | null;
+  status: 'available' | 'resting';
+  rest: {
+    /** Hours remaining until rested; 0 if already available. UI applies `Math.ceil`. */
+    hoursRemaining: number;
+    /** True if the crew member has never signed off — they're immediately available. */
+    neverSignedOff: boolean;
+  };
+  /** Free-form label for the "Eligible for" column, e.g. "Mail/Express, VB". */
+  eligibleForLabel: string;
+  /**
+   * Raw editable fields. The display columns above are projection-only —
+   * the Edit Crew modal hydrates its form from this slice so a separate
+   * "fetch single record" endpoint isn't needed (design.md §9.2 actions).
+   */
+  editable: {
+    /** Only present when `kind === 'LP'`. */
+    category?: LpCategory;
+    /**
+     * The raw `eligibleTrainTypes` array from the underlying record —
+     * NOT the derived drivable set. For LP this is the specialty certs
+     * (no PASSENGER/MAIL_EXPRESS); for ALP, no MEMU/DEMU.
+     */
+    eligibleTrainTypes: TrainType[];
+    /** ISO-8601 UTC; `null` when the crew member has never signed off. */
+    lastSignOffTime: string | null;
+  };
+}
+
+/**
+ * The Assignments tab row (components.md §10 / design.md §9.3). Keyed by
+ * Train, with the **currently active** assigned crew inlined for display.
+ *
+ * - `lp: null` → "Not assigned" in red.
+ * - `alp: null` → "Not assigned" in red (only on non-MEMU/DEMU trains).
+ * - `alp: 'NOT_REQUIRED'` → "Not required" in muted grey (only on MEMU/DEMU).
+ * - `isAssignable` is server-computed: `true` only when the train still has
+ *   an unfilled slot under the rules.
+ */
+export interface AssignmentRow {
+  trainId: string;
+  trainNumber: string;
+  trainName: string;
+  trainType: TrainType;
+  /** IST run-date this row represents (`YYYY-MM-DD`). */
+  runDate: string;
+  /** Materialized ISO-8601 UTC departure for `runDate`; UI renders IST. */
+  departureTime: string;
+  lp: { id: string; name: string } | null;
+  alp:
+    | { id: string; name: string } // assigned
+    | null                          // eligible-but-empty → "Not assigned"
+    | 'NOT_REQUIRED';               // MEMU/DEMU sentinel
+  isAssignable: boolean;
+}
+
+/**
+ * The Trains tab row (design.md §9.1). Extends `TrainRow` with the inlined
+ * "Currently assigned crew" projection so the table cell never refetches.
+ */
+export interface TrainWithAssignment extends TrainRow {
+  /** Currently active assigned LP, or `null`. */
+  lp: { id: string; name: string } | null;
+  /**
+   * Currently active assigned ALP. `null` for an ALP-eligible train with no
+   * ALP yet; `'NOT_REQUIRED'` for MEMU/DEMU.
+   */
+  alp:
+    | { id: string; name: string }
+    | null
+    | 'NOT_REQUIRED';
+}
+
+/** Per-kind aliases keep the SPA's typed-fetch wrappers semantically named. */
+export type LpWithRestStatus = CrewRow & { kind: 'LP' };
+export type AlpWithRestStatus = CrewRow & { kind: 'ALP' };
+
+/**
+ * Bucket counts that drive the "Hidden: 8 not eligible, 3 still resting,
+ * 1 already assigned" footnote (components.md §`HiddenCrewFootnote`).
+ */
+export interface HiddenCount {
+  notEligible: number;
+  resting: number;
+  alreadyAssigned: number;
+}
+
+/** A crew option as it appears in the AssignCrewModal dropdown. */
+export interface LpSummary {
+  id: string;
+  name: string;
+  /** Server-projected highest-rank drivable type, for an inline mini-badge. */
+  grade: TrainType | null;
+}
+export type AlpSummary = LpSummary;
+
+/**
+ * Response from `GET /api/eligible-crew?trainId=...`, consumed by
+ * `AssignCrewModal` (components.md §`AssignCrewModal`). The
+ * `assistant_loco_pilots` field is `null` for MEMU/DEMU — the SPA uses that
+ * sentinel to skip the ALP slot entirely.
+ */
+export interface EligibleCrewResponse {
+  train: TrainRow;
+  loco_pilots: { eligible: LpSummary[]; hidden: HiddenCount };
+  assistant_loco_pilots:
+    | { eligible: AlpSummary[]; hidden: HiddenCount }
+    | null;
+}
+
+/**
+ * Summary cards strip rendered on every page (design.md §9.4). All four
+ * numbers are scoped to the selected calendar date `D` in IST.
+ */
+export interface SummaryResponse {
+  /** The IST calendar date this summary is scoped to (`YYYY-MM-DD`). */
+  date: string;
+  /** Active trains whose `departureTime` falls on calendar date `D` IST. */
+  totalTrains: number;
+  /**
+   * Subset of `totalTrains` with **no active assignment** for that train.
+   * MEMU/DEMU: counted unassigned iff there is no LP. Others: iff either LP
+   * or ALP is missing.
+   */
+  unassignedTrains: number;
+  /**
+   * Active crew (LP + ALP combined) whose 16-hour rest is satisfied as of
+   * the start of `D` 00:00 IST — i.e., `lastSignOffTime` is null OR
+   * `lastSignOffTime + 16h ≤ start_of_D_IST_in_UTC`.
+   */
+  availableCrew: number;
+  /** Active crew (LP + ALP combined) NOT in `availableCrew`. */
+  restingCrew: number;
+}
+
+/** Unified error response wire format. Mirrors the domain `AssignmentError`. */
+export interface ApiErrorResponse {
+  code: string;
+  // any additional context fields from the discriminated union
+  [k: string]: unknown;
+}

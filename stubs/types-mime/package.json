@@ -1,0 +1,7 @@
+{
+  "name": "@types/mime",
+  "version": "3.0.4",
+  "description": "Local stub — Walmart registry blocks @types/mime; we don't use it directly.",
+  "types": "index.d.ts",
+  "private": true
+}
