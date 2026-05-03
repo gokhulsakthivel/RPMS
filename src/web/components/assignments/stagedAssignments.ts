@@ -1,102 +1,57 @@
-// `stagedAssignments` — frontend-only "draft cart" for the Assignments page.
+// `stagedAssignments` — frontend types + helpers for the server-backed
+// "draft cart" used by the Assignments page.
 //
-// Until the operator clicks the toolbar "+ Assign" button, none of the
-// edits performed inside the per-row Assign / Edit / Delete modals touch
-// the CSV. Each modal emits a `StagedOp` that the page accumulates in a
-// `Map<trainId, StagedOp>` (one in-flight op per train). The toolbar
-// "+ Assign" button drains the map by calling the backing REST endpoint
-// for every op in turn — only THEN does the persistent CSV change.
+// The cart itself is server-persisted (see `data/assignment_drafts.csv` and
+// `/api/assignment-drafts`). The page fetches the list, derives a
+// `Map<trainId, StagedOp>` for easy lookup by the per-row table and
+// the per-train modals, and round-trips every stage / unstage / commit
+// action through the API.
 //
 // Why a single op-per-train? An operator can only have one pending change
 // per train. Staging "create" then "edit" on the same train collapses to
 // the latest pick, because both produce the same persisted shape (one
-// `Assignment` row keyed by `(trainId, runDate)`).
+// `Assignment` row keyed by `(trainId, runDate)`). The server enforces
+// this with an `(trainId, runDate)` upsert key.
 //
-// This module is intentionally pure — no React, no API calls. It owns the
-// shape of a draft + a couple of pure helpers; the page handles wiring.
+// Type policy: the canonical wire shape lives in `src/shared/schemas.ts` as
+// `AssignmentDraftStageInput` / `AssignmentDraftRow`. The `StagedOp*`
+// aliases below re-export them under the names the SPA already uses, so
+// component prop types and the wire format stay in lockstep automatically.
 
-import type { AssignmentRow } from '../../../shared/schemas';
-
-/** Reuse the AssignmentRow's train-type field rather than importing the
- *  domain enum from outside the web layer. */
-type TrainType = AssignmentRow['trainType'];
-
-// ---------------------------------------------------------------------------
-// Shared display copy
-// ---------------------------------------------------------------------------
-
-/** Display fields all staged ops keep so the table can render without a re-fetch. */
-export interface StagedDisplay {
-  trainId: string;
-  trainNumber: string;
-  trainName: string;
-  trainType: TrainType;
-  runDate: string;
-  /** ISO-8601 instant — used to sort the draft summary chronologically. */
-  departureTime: string;
-}
+import type {
+  AssignmentDraftRow,
+  AssignmentDraftStageInput,
+} from '../../../shared/schemas';
 
 // ---------------------------------------------------------------------------
-// StagedOp — discriminated union
+// StagedOp — discriminated union (alias of the wire shape)
 // ---------------------------------------------------------------------------
 
-export interface StagedCreate extends StagedDisplay {
-  kind: 'create';
-  lpId: string;
-  lpName: string;
-  /** Null when the train type doesn't require an ALP (MEMU/DEMU). */
-  alpId: string | null;
-  alpName: string | null;
-}
+/**
+ * Display fields every staged op carries — keeps the table renderable
+ * without re-fetching crew/train rows. Equivalent to the `StagedDisplay`
+ * shape from the wire schema's discriminated union.
+ */
+export type StagedDisplay = Pick<
+  AssignmentDraftRow,
+  'trainId' | 'trainNumber' | 'trainName' | 'trainType' | 'runDate' | 'departureTime'
+>;
 
-export interface StagedUpdate extends StagedDisplay {
-  kind: 'update';
-  /** The persisted assignment row this draft will mutate. */
-  assignmentId: string;
-  /** Original LP — kept so the table can show "John D. → Mary S." */
-  originalLpName: string;
-  originalAlpName: string | null;
-  /** New picks (post-edit). */
-  lpId: string;
-  lpName: string;
-  alpId: string | null;
-  alpName: string | null;
-}
+/** Staged "create a new assignment" op. */
+export type StagedCreate = Extract<AssignmentDraftStageInput, { kind: 'create' }>;
 
-export interface StagedDelete extends StagedDisplay {
-  kind: 'delete';
-  /** The persisted assignment row this draft will archive. */
-  assignmentId: string;
-  /** Snapshot of the crew that's about to be archived (for display). */
-  lpName: string;
-  alpName: string | null;
-}
+/** Staged "edit the LP/ALP on an existing assignment" op. */
+export type StagedUpdate = Extract<AssignmentDraftStageInput, { kind: 'update' }>;
 
-export type StagedOp = StagedCreate | StagedUpdate | StagedDelete;
+/** Staged "archive an existing assignment" op. */
+export type StagedDelete = Extract<AssignmentDraftStageInput, { kind: 'delete' }>;
+
+/** A single buffered op — discriminated on `kind`. */
+export type StagedOp = AssignmentDraftStageInput;
 
 // ---------------------------------------------------------------------------
-// Small pure helpers
+// Small pure helpers — no React, no API calls.
 // ---------------------------------------------------------------------------
-
-/** Replace (or insert) an op for `trainId`. Returns a NEW Map. */
-export function setStagedOp(
-  prev: ReadonlyMap<string, StagedOp>,
-  op: StagedOp,
-): Map<string, StagedOp> {
-  const next = new Map(prev);
-  next.set(op.trainId, op);
-  return next;
-}
-
-/** Remove the op for `trainId`. Returns a NEW Map. */
-export function removeStagedOp(
-  prev: ReadonlyMap<string, StagedOp>,
-  trainId: string,
-): Map<string, StagedOp> {
-  const next = new Map(prev);
-  next.delete(trainId);
-  return next;
-}
 
 /**
  * Human-friendly verb for the toolbar / banner copy.

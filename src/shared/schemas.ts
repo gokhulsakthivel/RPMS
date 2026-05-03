@@ -285,6 +285,100 @@ export const AssignmentUpdateInput = z
 export type AssignmentUpdateInput = z.infer<typeof AssignmentUpdateInput>;
 
 // ---------------------------------------------------------------------------
+// Assignment Drafts — server-persisted "draft cart" entries.
+// ---------------------------------------------------------------------------
+//
+// The Assignments tab stages every Assign / Edit / Delete action into a
+// server-side cart instead of mutating the CSV directly. The toolbar
+// "+ Assign (N)" button drains the cart by calling the regular orchestrators.
+//
+// One row per `(trainId, runDate)`. The wire format is a discriminated union
+// on `kind` so the frontend renders without a per-row branch.
+
+/** Materialized UTC departure for the run, ISO-8601 with offset. */
+const departureTimeWire = z
+  .string()
+  .datetime({ offset: true });
+
+/** Display fields every staged op carries — keeps the table renderable
+ *  without re-fetching crew/train rows. */
+const stagedDisplayFields = {
+  trainId: nonEmptyString,
+  trainNumber: nonEmptyString,
+  trainName: nonEmptyString,
+  trainType: trainTypeSchema,
+  runDate: isoCalendarDate,
+  departureTime: departureTimeWire,
+};
+
+const assignmentDraftCreateSchema = z.object({
+  kind: z.literal('create'),
+  ...stagedDisplayFields,
+  lpId: nonEmptyString,
+  lpName: nonEmptyString,
+  /** Null when the train type doesn't require an ALP (MEMU/DEMU). */
+  alpId: nonEmptyString.nullable(),
+  alpName: z.string().nullable(),
+});
+
+const assignmentDraftUpdateSchema = z.object({
+  kind: z.literal('update'),
+  ...stagedDisplayFields,
+  assignmentId: nonEmptyString,
+  /** Snapshot of the row's previously-persisted crew (display-only). */
+  originalLpName: z.string(),
+  originalAlpName: z.string().nullable(),
+  /** New picks. */
+  lpId: nonEmptyString,
+  lpName: nonEmptyString,
+  alpId: nonEmptyString.nullable(),
+  alpName: z.string().nullable(),
+});
+
+const assignmentDraftDeleteSchema = z.object({
+  kind: z.literal('delete'),
+  ...stagedDisplayFields,
+  assignmentId: nonEmptyString,
+  /** Snapshot of the crew about to be archived (display-only). */
+  lpName: z.string(),
+  alpName: z.string().nullable(),
+});
+
+/**
+ * Request body for `POST /api/assignment-drafts` and the wire shape of
+ * each row in the `GET /api/assignment-drafts?date=...` response. The
+ * server upserts by `(trainId, runDate)` so re-staging is idempotent.
+ */
+export const AssignmentDraftStageInput = z.discriminatedUnion('kind', [
+  assignmentDraftCreateSchema,
+  assignmentDraftUpdateSchema,
+  assignmentDraftDeleteSchema,
+]);
+export type AssignmentDraftStageInput = z.infer<
+  typeof AssignmentDraftStageInput
+>;
+
+/** A single row in the GET response — same shape as the input. */
+export type AssignmentDraftRow = AssignmentDraftStageInput;
+
+/**
+ * Per-draft outcome from the bulk-commit endpoint. Successful drafts are
+ * deleted from the cart server-side; failures stay so the operator can fix
+ * and retry without re-keying picks.
+ */
+export type AssignmentDraftCommitResult =
+  | { trainId: string; success: true }
+  | {
+      trainId: string;
+      success: false;
+      error: ApiErrorResponse;
+    };
+
+export interface AssignmentDraftCommitResponse {
+  results: AssignmentDraftCommitResult[];
+}
+
+// ---------------------------------------------------------------------------
 // Query params
 // ---------------------------------------------------------------------------
 

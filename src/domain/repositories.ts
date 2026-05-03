@@ -5,6 +5,7 @@
 
 import {
   Assignment,
+  AssignmentDraft,
   AssistantLocoPilot,
   CrewRole,
   Leave,
@@ -105,4 +106,27 @@ export interface LeaveRepo {
   create(input: Omit<Leave, 'id' | 'createdAt' | 'archivedAt'>): Promise<Leave>;
   update(id: string, patch: Partial<Omit<Leave, 'id' | 'createdAt'>>): Promise<Leave>;
   archive(id: string): Promise<void>;
+}
+
+/**
+ * Buffered draft cart — see `AssignmentDraft` in `types.ts`. The repo is
+ * server-side persistence for the Assignments tab's pending edits. Drafts
+ * are deleted (not archived) once committed, since they carry no audit
+ * meaning beyond "this op has not yet been applied".
+ */
+export interface AssignmentDraftRepo {
+  /** All drafts, optionally narrowed to a single IST run-date. */
+  list(opts?: { runDate?: string }): Promise<AssignmentDraft[]>;
+  findByTrainAndDate(trainId: string, runDate: string): Promise<AssignmentDraft | null>;
+  /**
+   * Insert-or-replace by `(trainId, runDate)`. Reusing an existing slot
+   * preserves its `id` and `createdAt`; a fresh slot mints both.
+   */
+  upsert(input: Omit<AssignmentDraft, 'id' | 'createdAt'>): Promise<AssignmentDraft>;
+  /** Hard-delete a single draft row by id. */
+  delete(id: string): Promise<void>;
+  /** Hard-delete the (at most one) draft for `(trainId, runDate)`. Returns true if a row was removed. */
+  deleteByTrainAndDate(trainId: string, runDate: string): Promise<boolean>;
+  /** Hard-delete every draft for an IST run-date. Returns the count removed. */
+  deleteAllForDate(runDate: string): Promise<number>;
 }

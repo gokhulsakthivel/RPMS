@@ -17,6 +17,9 @@ import type {
   AlpUpdateInput,
   ApiErrorResponse,
   AssignCrewInput,
+  AssignmentDraftCommitResponse,
+  AssignmentDraftRow,
+  AssignmentDraftStageInput,
   AssignmentRow,
   AssignmentUpdateInput,
   CrewRow,
@@ -261,6 +264,47 @@ export const assignments = {
   eligibleCrew: (trainId: string, runDate: string) =>
     request<EligibleCrewResponse>(
       `/api/eligible-crew?trainId=${encodeURIComponent(trainId)}&runDate=${encodeURIComponent(runDate)}`,
+    ),
+};
+
+// ---------------------------------------------------------------------------
+// Assignment Drafts  →  /api/assignment-drafts
+// ---------------------------------------------------------------------------
+//
+// Server-backed "draft cart" used by the Assignments page. Every per-row
+// modal stages an op via `upsert(...)`; the toolbar "+ Assign (N)" button
+// calls `commit(...)` to drain the cart by delegating each draft to the
+// regular assignment orchestrators on the server. The cart survives page
+// reloads and is shared across tabs/operators because it's the CSV.
+
+export const assignmentDrafts = {
+  list: (date: string) =>
+    request<AssignmentDraftRow[]>(
+      `/api/assignment-drafts?date=${encodeURIComponent(date)}`,
+    ),
+
+  upsert: (input: AssignmentDraftStageInput) =>
+    request<AssignmentDraftRow>('/api/assignment-drafts', {
+      method: 'POST',
+      jsonBody: input,
+    }),
+
+  remove: (trainId: string, date: string) =>
+    request<void>(
+      `/api/assignment-drafts/${encodeURIComponent(trainId)}?date=${encodeURIComponent(date)}`,
+      { method: 'DELETE' },
+    ),
+
+  reset: (date: string) =>
+    request<void>(
+      `/api/assignment-drafts?date=${encodeURIComponent(date)}`,
+      { method: 'DELETE' },
+    ),
+
+  commit: (date: string) =>
+    request<AssignmentDraftCommitResponse>(
+      `/api/assignment-drafts/commit?date=${encodeURIComponent(date)}`,
+      { method: 'POST' },
     ),
 };
 

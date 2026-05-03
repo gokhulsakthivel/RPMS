@@ -1,43 +1,44 @@
 // `AssignmentsPage` — per-train assignments view (design.md §9.3).
 //
-// Staging model:
-//   The page owns a frontend-only "draft cart" — `Map<trainId, StagedOp>` —
-//   that buffers every assignment change the operator makes. The per-row
-//   modals (Assign / Edit) and the per-row Delete confirmation all
-//   STAGE an op into the cart instead of touching the CSV directly. Two
-//   toolbar buttons let the operator manage the draft as a whole:
+// Staging model (server-backed):
+//   The page maintains a SERVER-PERSISTED draft cart — `data/assignment_drafts.csv`
+//   exposed via `/api/assignment-drafts`. The per-row Assign / Edit / Delete
+//   modals call `POST /api/assignment-drafts` to upsert one draft per train,
+//   and the toolbar drives the cart as a whole:
 //
-//   - "+ Assign (N)" — drains the cart by POST/PUT/archive-ing every op
-//     in turn. This is the ONLY moment the CSV is modified.
-//   - "Reset draft"  — clears the cart without persisting anything.
+//   - "+ Assign (N)" → `POST /api/assignment-drafts/commit?date=...`. The
+//     server iterates each draft, calls the regular orchestrators, and
+//     hard-deletes successful drafts. Returns a per-draft result array.
+//   - "Reset draft"  → `DELETE /api/assignment-drafts?date=...`. Drops every
+//     draft for the selected date.
 //
 // Per-row affordances on rows with a staged op:
 //   - Edit ✎  — re-opens the appropriate modal with the staged values
 //                pre-filled, so the operator can revise the draft.
-//   - Remove ✕ — drops the op from the cart (no API call).
+//   - Remove ✕ — `DELETE /api/assignment-drafts/:trainId?date=...`.
 //
-// Successful bulk commits clear the cart, refetch the list, and bump the
-// summary cards. Partial failures keep the failed ops in the cart with a
-// toast summary so the operator can fix and retry.
+// Why server-backed? A page reload, second tab, or second operator all see
+// the same in-flight changes. The CSV is the source of truth — including
+// for "what hasn't been committed yet".
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
+  assignmentDrafts as assignmentDraftsApi,
   assignments as assignmentsApi,
 } from '../lib/api';
 import { describeApiError } from '../lib/errors';
 import { useSelectedDate } from '../lib/useSelectedDate';
-import type { AssignmentRow } from '../../shared/schemas';
+import type {
+  AssignmentDraftRow,
+  AssignmentRow,
+} from '../../shared/schemas';
 import { PageHeader } from '../components/PageHeader';
 import { refreshSummary } from '../components/chrome/SummaryCards';
 import { AssignCrewModal } from '../components/assignments/AssignCrewModal';
 import { AssignmentTable } from '../components/assignments/AssignmentTable';
 import { EditAssignmentModal } from '../components/assignments/EditAssignmentModal';
-import {
-  type StagedOp,
-  removeStagedOp,
-  setStagedOp,
-} from '../components/assignments/stagedAssignments';
+import type { StagedOp } from '../components/assignments/stagedAssignments';
 import { Banner } from '../components/feedback/Banner';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { SkeletonRows } from '../components/feedback/SkeletonRows';
@@ -59,19 +60,18 @@ export function AssignmentsPage() {
   const [editing, setEditing] = useState<AssignmentRow | null>(null);
   const [deleting, setDeleting] = useState<AssignmentRow | null>(null);
 
-  // Frontend-only draft cart. Keyed by trainId — one staged op per train.
-  const [staged, setStaged] = useState<ReadonlyMap<string, StagedOp>>(
-    new Map(),
-  );
+  // Server-backed draft cart. The list comes from the API; the `staged` Map
+  // is derived for the table/modals (which expect a Map<trainId, StagedOp>).
+  const [drafts, setDrafts] = useState<AssignmentDraftRow[] | null>(null);
+  const [draftTick, setDraftTick] = useState(0);
   const [committing, setCommitting] = useState(false);
 
   const refetch = useCallback(() => setTick((n) => n + 1), []);
+  const refetchDrafts = useCallback(() => setDraftTick((n) => n + 1), []);
 
-  // Clear staged drafts when the operator switches dates — drafts from
-  // 2024-08-12 don't make sense once we're looking at 2024-08-13.
-  useEffect(() => {
-    setStaged(new Map());
-  }, [selectedDate]);
+  // -------------------------------------------------------------------------
+  // Fetch effects — assignments and drafts both reload on date change.
+  // -------------------------------------------------------------------------
 
   useEffect(() => {
     let cancelled = false;
@@ -93,21 +93,85 @@ export function AssignmentsPage() {
     };
   }, [selectedDate, tick]);
 
+  useEffect(() => {
+    let cancelled = false;
+    assignmentDraftsApi
+      .list(selectedDate)
+      .then((data) => {
+        if (!cancelled) setDrafts(data);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        // Don't blow away the page UI for a transient draft-list failure —
+        // the draft cart degrades to "empty" but the assignments list still
+        // renders. A retry happens on the next staging action.
+        // eslint-disable-next-line no-console
+        console.error('failed to load drafts:', e);
+        setDrafts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate, draftTick]);
+
+  // -------------------------------------------------------------------------
+  // Derived: Map<trainId, StagedOp> — what the table + modals consume.
+  // The wire shape `AssignmentDraftRow` is structurally identical to
+  // `StagedOp`, so the cast is just a type-system convenience.
+  // -------------------------------------------------------------------------
+
+  const staged = useMemo<ReadonlyMap<string, StagedOp>>(() => {
+    const m = new Map<string, StagedOp>();
+    if (!drafts) return m;
+    for (const d of drafts) m.set(d.trainId, d as StagedOp);
+    return m;
+  }, [drafts]);
+
   // -------------------------------------------------------------------------
   // Stage handlers — each modal/dialog calls one of these on Save / confirm.
+  // Every action round-trips through the API; a failure is surfaced via
+  // toast and leaves the cart untouched.
   // -------------------------------------------------------------------------
 
-  const stageOp = useCallback((op: StagedOp) => {
-    setStaged((prev) => setStagedOp(prev, op));
-  }, []);
+  const stageOp = useCallback(
+    async (op: StagedOp) => {
+      try {
+        await assignmentDraftsApi.upsert(op);
+        refetchDrafts();
+      } catch (e) {
+        toast.error(
+          `Couldn't save draft — ${
+            e instanceof ApiError
+              ? describeApiError(e)
+              : (e as Error).message
+          }`,
+        );
+      }
+    },
+    [refetchDrafts, toast],
+  );
 
-  const unstage = useCallback((trainId: string) => {
-    setStaged((prev) => removeStagedOp(prev, trainId));
-  }, []);
+  const unstage = useCallback(
+    async (trainId: string) => {
+      try {
+        await assignmentDraftsApi.remove(trainId, selectedDate);
+        refetchDrafts();
+      } catch (e) {
+        toast.error(
+          `Couldn't remove draft — ${
+            e instanceof ApiError
+              ? describeApiError(e)
+              : (e as Error).message
+          }`,
+        );
+      }
+    },
+    [refetchDrafts, selectedDate, toast],
+  );
 
-  function confirmStageDelete() {
+  async function confirmStageDelete() {
     if (!deleting || !deleting.assignmentId) return;
-    stageOp({
+    await stageOp({
       kind: 'delete',
       assignmentId: deleting.assignmentId,
       trainId: deleting.trainId,
@@ -126,76 +190,63 @@ export function AssignmentsPage() {
   }
 
   // -------------------------------------------------------------------------
-  // Bulk commit — drains the cart into the REST API. The ONLY place this
-  // page touches the CSV.
+  // Bulk commit — drains the server-side cart. Successful drafts are
+  // deleted by the server; failures stay so the operator can fix and retry.
   // -------------------------------------------------------------------------
 
   async function commitAll() {
-    if (staged.size === 0) return;
+    if (!drafts || drafts.length === 0) return;
     setCommitting(true);
-    const successfulTrainIds: string[] = [];
-    const failures: Array<{ op: StagedOp; message: string }> = [];
-
-    // Sequential — keeps error attribution straightforward and avoids
-    // the API needing to handle concurrent writes from one operator.
-    for (const op of staged.values()) {
-      try {
-        if (op.kind === 'create') {
-          await assignmentsApi.create({
-            trainId: op.trainId,
-            runDate: op.runDate,
-            lpId: op.lpId,
-            ...(op.alpId ? { alpId: op.alpId } : {}),
-          });
-        } else if (op.kind === 'update') {
-          await assignmentsApi.update(op.assignmentId, {
-            lpId: op.lpId,
-            ...(op.alpId ? { alpId: op.alpId } : {}),
-          });
-        } else {
-          await assignmentsApi.archive(op.assignmentId);
-        }
-        successfulTrainIds.push(op.trainId);
-      } catch (e) {
-        failures.push({
-          op,
-          message:
-            e instanceof ApiError ? describeApiError(e) : (e as Error).message,
-        });
+    try {
+      const { results } = await assignmentDraftsApi.commit(selectedDate);
+      const successes = results.filter((r) => r.success).length;
+      const failures = results.filter((r) => !r.success);
+      if (failures.length === 0) {
+        toast.success(
+          `Saved ${successes} change${successes === 1 ? '' : 's'}`,
+        );
+      } else {
+        const head = failures[0];
+        const draft = head
+          ? drafts.find((d) => d.trainId === head.trainId)
+          : undefined;
+        const trainNumber = draft ? draft.trainNumber : '?';
+        const message =
+          head && !head.success
+            ? typeof head.error['message'] === 'string'
+              ? (head.error['message'] as string)
+              : head.error.code
+            : '';
+        toast.error(
+          `${successes} saved, ${failures.length} failed — ${trainNumber}: ${message}`,
+        );
       }
-    }
-
-    // Drop the successful ops from the cart; keep failures so the
-    // operator can fix and retry.
-    setStaged((prev) => {
-      const next = new Map(prev);
-      for (const id of successfulTrainIds) next.delete(id);
-      return next;
-    });
-    setCommitting(false);
-
-    if (failures.length === 0) {
-      toast.success(
-        `Saved ${successfulTrainIds.length} change${
-          successfulTrainIds.length === 1 ? '' : 's'
-        }`,
-      );
-    } else {
-      const head = failures[0];
+    } catch (e) {
       toast.error(
-        `${successfulTrainIds.length} saved, ${failures.length} failed — ${
-          head ? `${head.op.trainNumber}: ${head.message}` : ''
+        `Commit failed — ${
+          e instanceof ApiError ? describeApiError(e) : (e as Error).message
         }`,
       );
+    } finally {
+      setCommitting(false);
+      refetchDrafts();
+      refetch();
+      refreshSummary();
     }
-
-    refetch();
-    refreshSummary();
   }
 
-  function resetDraft() {
-    setStaged(new Map());
-    toast.info('Draft cleared');
+  async function resetDraft() {
+    try {
+      await assignmentDraftsApi.reset(selectedDate);
+      refetchDrafts();
+      toast.info('Draft cleared');
+    } catch (e) {
+      toast.error(
+        `Couldn't reset draft — ${
+          e instanceof ApiError ? describeApiError(e) : (e as Error).message
+        }`,
+      );
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -243,8 +294,9 @@ export function AssignmentsPage() {
 
       {draftCount > 0 ? (
         <Banner tone="info" title={`${draftCount} change${draftCount === 1 ? '' : 's'} pending`}>
-          These changes are buffered locally — nothing has been written to the CSV yet.
-          Click <strong>+ Assign</strong> to commit, or <strong>Reset draft</strong> to discard.
+          These changes are buffered on the server — nothing has been written to the
+          assignments CSV yet. Click <strong>+ Assign</strong> to commit, or
+          <strong> Reset draft</strong> to discard.
         </Banner>
       ) : null}
 
@@ -273,7 +325,9 @@ export function AssignmentsPage() {
           onAssign={setTarget}
           onEdit={setEditing}
           onDelete={setDeleting}
-          onUnstage={unstage}
+          onUnstage={(trainId) => {
+            void unstage(trainId);
+          }}
         />
       ) : null}
 
@@ -296,9 +350,10 @@ export function AssignmentsPage() {
         staged={staged}
         onClose={() => setTarget(null)}
         onStage={(op) => {
-          stageOp(op);
-          setTarget(null);
-          toast.success(`Draft saved for ${op.trainNumber}`);
+          void stageOp(op).then(() => {
+            setTarget(null);
+            toast.success(`Draft saved for ${op.trainNumber}`);
+          });
         }}
       />
 
@@ -320,9 +375,10 @@ export function AssignmentsPage() {
         staged={staged}
         onClose={() => setEditing(null)}
         onStage={(op) => {
-          stageOp(op);
-          setEditing(null);
-          toast.success(`Draft saved for ${op.trainNumber}`);
+          void stageOp(op).then(() => {
+            setEditing(null);
+            toast.success(`Draft saved for ${op.trainNumber}`);
+          });
         }}
       />
 
@@ -331,12 +387,14 @@ export function AssignmentsPage() {
         title="Stage this assignment for archive?"
         body={
           deleting
-            ? `The active assignment for ${deleting.trainNumber} · ${deleting.trainName} will be staged for archive. Nothing is written to the CSV until you click + Assign.`
+            ? `The active assignment for ${deleting.trainNumber} · ${deleting.trainName} will be staged for archive. Nothing is written to the assignments CSV until you click + Assign.`
             : ''
         }
         confirmLabel="Stage archive"
         destructive
-        onConfirm={confirmStageDelete}
+        onConfirm={() => {
+          void confirmStageDelete();
+        }}
         onCancel={() => setDeleting(null)}
       />
 

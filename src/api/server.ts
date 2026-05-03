@@ -15,11 +15,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { CsvAssignmentDraftRepo } from '../persistence/csvAssignmentDraftRepo';
 import { CsvAssignmentRepo } from '../persistence/csvAssignmentRepo';
 import { CsvAssistantLocoPilotRepo } from '../persistence/csvAssistantLocoPilotRepo';
 import { CsvLeaveRepo } from '../persistence/csvLeaveRepo';
 import { CsvLocoPilotRepo } from '../persistence/csvLocoPilotRepo';
 import { CsvTrainRepo } from '../persistence/csvTrainRepo';
+import { createAssignmentDraftsRouter } from './assignmentDrafts';
 import {
   createAssignmentsRouter,
   createEligibleCrewRouter,
@@ -54,8 +56,10 @@ const lps = new CsvLocoPilotRepo(DATA_DIR);
 const alps = new CsvAssistantLocoPilotRepo(DATA_DIR);
 const assignments = new CsvAssignmentRepo(DATA_DIR);
 const leaves = new CsvLeaveRepo(DATA_DIR);
+const drafts = new CsvAssignmentDraftRepo(DATA_DIR);
 
 const repoDeps = { trains, lps, alps, assignments, leaves };
+const draftDeps = { drafts, ...repoDeps };
 
 // ---------------------------------------------------------------------------
 // App
@@ -83,6 +87,7 @@ export function createApp(): express.Express {
   app.use('/api/loco-pilots',             createLocoPilotsRouter({ lps }));
   app.use('/api/assistant-loco-pilots',   createAssistantLocoPilotsRouter({ alps }));
   app.use('/api/assignments',             createAssignmentsRouter(repoDeps));
+  app.use('/api/assignment-drafts',       createAssignmentDraftsRouter(draftDeps));
   app.use('/api/eligible-crew',           createEligibleCrewRouter(repoDeps));
   app.use('/api/leaves',                  createLeavesRouter({ leaves, lps, alps }));
   app.use('/api/summary',                 createSummaryRouter(repoDeps));

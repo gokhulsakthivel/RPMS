@@ -188,6 +188,61 @@ export interface Leave {
   archivedAt?: Date;
 }
 
+/**
+ * A buffered, server-persisted assignment edit. Operators stage Assign /
+ * Edit / Delete actions on the Assignments tab into a "draft cart" that is
+ * stored on the server (rather than in browser state) so a page reload, a
+ * second tab, or a second operator all see the same pending changes. The
+ * cart is drained by the bulk-commit endpoint, which calls `assignCrew`,
+ * `updateAssignment`, or `archive` for each draft in turn.
+ *
+ * Uniqueness: at most one active draft per `(trainId, runDate)`.
+ *
+ * Field semantics by `kind`:
+ *
+ * - `create`:  `lpId`/`lpName` populated; `alpId`/`alpName` populated only
+ *              when the train type requires an ALP. `assignmentId` and
+ *              `originalLp/Alp*` are absent.
+ * - `update`:  `assignmentId` is the persisted row to mutate; `lpId`/`lpName`
+ *              are the NEW pick (and `alpId`/`alpName` for ALP-required types).
+ *              `originalLpName`/`originalAlpName` snapshot the previous values
+ *              for "before → after" display.
+ * - `delete`:  `assignmentId` is the persisted row to archive. `lpName`/
+ *              `alpName` snapshot the crew about to be archived (display only).
+ *              `lpId`/`alpId`/`originalLp/Alp*` are absent.
+ */
+export type AssignmentDraftKind = 'create' | 'update' | 'delete';
+
+export interface AssignmentDraft {
+  id: string;
+  kind: AssignmentDraftKind;
+  trainId: string;
+  trainNumber: string;
+  trainName: string;
+  trainType: TrainType;
+  /** IST calendar date (`YYYY-MM-DD`) — together with `trainId` keys the row. */
+  runDate: string;
+  /** Materialized UTC departure for the run — kept for client-side sorting. */
+  departureTime: Date;
+  /** Required when `kind === 'update' | 'delete'`. */
+  assignmentId?: string;
+  /** New pick. Required when `kind === 'create' | 'update'`. */
+  lpId?: string;
+  /** Display name. Required when `kind === 'create' | 'update'`; on `'delete'`
+   *  this carries the snapshot of the LP about to be archived. */
+  lpName?: string;
+  /** New pick. Set when the train type requires an ALP and a draft pick exists. */
+  alpId?: string;
+  /** Display name; same dual role as `lpName` on `'delete'`. */
+  alpName?: string;
+  /** Snapshot of the previous LP — only set when `kind === 'update'`. */
+  originalLpName?: string;
+  /** Snapshot of the previous ALP — only set when `kind === 'update'`. */
+  originalAlpName?: string;
+  /** UTC. */
+  createdAt: Date;
+}
+
 // ---------------------------------------------------------------------------
 // 4. Error Contract — structured, never raw strings.
 // ---------------------------------------------------------------------------

@@ -1203,6 +1203,12 @@ a:hover {
   font-style: italic;
 }
 
+.assign-table__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 /* ---------- AssignCrewModal -------------------------------------------- */
 .assign-modal__head {
   display: flex;
