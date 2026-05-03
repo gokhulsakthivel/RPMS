@@ -1,13 +1,24 @@
 // `AssignCrewModal` — "the heart of the app" (design.md §9.3).
 //
-// Workflow:
+// Workflow (M-staging):
 //   1. Modal opens with a `trainId`. Fetch `/api/eligible-crew?trainId=…`.
 //   2. Render two pre-filtered dropdowns (LP + optional ALP) plus a
 //      `HiddenCrewFootnote` under each.
 //   3. For MEMU/DEMU trains the ALP slot is omitted entirely
 //      (`response.assistant_loco_pilots === null`) — there's no slot to fill.
-//   4. Submit → POST `/api/assignments`. Success closes; rule errors render
-//      as a Banner inside the modal so the operator can pick differently.
+//   4. **Save adds the picks to the page-level draft cart — it does NOT
+//      POST to /api/assignments.** Persistence happens only when the
+//      operator clicks the toolbar "+ Assign" button on the page, which
+//      drains every staged op into the appropriate REST endpoint.
+//
+// Buffered semantics: the modal owns its own LP/ALP state until the
+// operator clicks Save (or Reset / Cancel). On Save it emits a `StagedOp`
+// of kind `'create'` via `onStage`. The parent decides what to do with
+// it — typically: insert into the draft `Map<trainId, StagedOp>`.
+//
+// Pre-fill: if the operator already has a `'create'` op staged for this
+// train and re-opens the modal, `initialLpId` / `initialAlpId` repopulate
+// the form so the existing draft is editable in place.
 
 import { useEffect, useState } from 'react';
 import {
@@ -27,18 +38,42 @@ import { TrainTypeBadge } from '../trains/TrainTypeBadge';
 import { formatIst } from '../../lib/time';
 import { EligibleCrewSelect } from './EligibleCrewSelect';
 import { HiddenCrewFootnote } from './HiddenCrewFootnote';
+import {
+  type StagedCreate,
+  type StagedOp,
+  stagedCrewIds,
+} from './stagedAssignments';
 
 export interface AssignCrewModalProps {
   /** Open iff non-null. Carries the train identifier + display fields. */
   target: AssignmentRow | null;
+  /** Pre-selected LP — used when re-editing an already-staged draft. */
+  initialLpId?: string | null;
+  /** Pre-selected ALP — used when re-editing an already-staged draft. */
+  initialAlpId?: string | null;
+  /**
+   * The page-level draft cart. Used to hide crew already claimed by
+   * staged ops on OTHER trains so the operator never offers the same
+   * person twice. The current train's own staged op is excluded so
+   * re-opening the modal on a draft row keeps that draft's picks visible.
+   */
+  staged?: ReadonlyMap<string, StagedOp>;
   onClose: () => void;
-  onAssigned: () => void;
+  /**
+   * Called when the operator clicks Save. Emits a `'create'` op carrying
+   * everything the parent needs to a) display the draft in the table and
+   * b) POST it on bulk-commit.
+   */
+  onStage: (op: StagedCreate) => void;
 }
 
 export function AssignCrewModal({
   target,
+  initialLpId = null,
+  initialAlpId = null,
+  staged,
   onClose,
-  onAssigned,
+  onStage,
 }: AssignCrewModalProps) {
   const [eligible, setEligible] = useState<EligibleCrewResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,13 +81,13 @@ export function AssignCrewModal({
 
   const [lpId, setLpId] = useState<string | null>(null);
   const [alpId, setAlpId] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  // Reset transient state on each open.
+  // Reset transient state on each open and pre-fill from `initial*` if
+  // provided (re-edit of an existing staged draft).
   useEffect(() => {
     if (!target) return;
-    setLpId(null);
-    setAlpId(null);
+    setLpId(initialLpId);
+    setAlpId(initialAlpId);
     setServerError(null);
     setEligible(null);
 
@@ -81,39 +116,73 @@ export function AssignCrewModal({
     return () => {
       cancelled = true;
     };
-  }, [target]);
+    // We deliberately key on `target?.trainId` rather than the whole row so
+    // a parent refetch (which produces a new AssignmentRow object) doesn't
+    // wipe the operator's in-flight picks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.trainId, target?.runDate]);
 
   function close() {
     setServerError(null);
     onClose();
   }
 
-  async function submit() {
-    if (!target || !lpId) return;
+  function reset() {
+    // Clear buffered picks back to the modal's initial open-state. For a
+    // fresh draft that's "no picks"; for a re-edit it's the originally-
+    // staged values. The eligible-crew cache is preserved so the dropdowns
+    // repopulate instantly.
+    setLpId(initialLpId);
+    setAlpId(initialAlpId);
     setServerError(null);
-    setSubmitting(true);
-    try {
-      await assignmentsApi.create({
-        trainId: target.trainId,
-        // M9 — assignments are keyed by `(trainId, runDate)`; the orchestrator
-        // re-materializes departure / sign-off from the train schedule, so the
-        // SPA never sends absolute UTC instants.
-        runDate: target.runDate,
-        lpId,
-        // The eligibleCrew response tells us whether the ALP slot exists.
-        // Only include `alpId` when the slot is required AND the user picked.
-        ...(eligible?.assistant_loco_pilots && alpId ? { alpId } : {}),
-      });
-      onAssigned();
-    } catch (e) {
-      if (e instanceof ApiError) {
-        setServerError(describeApiError(e));
-      } else {
-        setServerError((e as Error).message);
-      }
-    } finally {
-      setSubmitting(false);
+  }
+
+  // Crew already claimed by staged ops on OTHER trains. We exclude the
+  // current train's own op so re-editing a draft doesn't make its own
+  // picks vanish from the dropdown.
+  const claimed = staged
+    ? stagedCrewIds(staged, target?.trainId)
+    : { lpIds: new Set<string>(), alpIds: new Set<string>() };
+
+  // Filtered options + counts of how many we hid so the footnote can show
+  // an accurate "already assigned" count (the server's count plus our
+  // staged-but-not-yet-persisted picks).
+  const eligibleLp = eligible?.loco_pilots.eligible ?? [];
+  const eligibleAlp = eligible?.assistant_loco_pilots?.eligible ?? [];
+  const lpOptions = eligibleLp.filter((o) => !claimed.lpIds.has(o.id));
+  const alpOptions = eligibleAlp.filter((o) => !claimed.alpIds.has(o.id));
+  const lpStagedHidden = eligibleLp.length - lpOptions.length;
+  const alpStagedHidden = eligibleAlp.length - alpOptions.length;
+
+  function save() {
+    if (!target || !lpId || !eligible) return;
+    // Resolve the picked LP/ALP to their display names so the page table
+    // can render the staged draft without re-fetching crew rows.
+    const lpOpt = lpOptions.find((o) => o.id === lpId);
+    if (!lpOpt) {
+      setServerError('Selected Loco Pilot is no longer eligible. Please reselect.');
+      return;
     }
+    const alpOpt =
+      eligible.assistant_loco_pilots && alpId
+        ? alpOptions.find((o) => o.id === alpId) ?? null
+        : null;
+
+    onStage({
+      kind: 'create',
+      trainId: target.trainId,
+      trainNumber: target.trainNumber,
+      trainName: target.trainName,
+      trainType: target.trainType,
+      runDate: target.runDate,
+      departureTime: target.departureTime,
+      lpId: lpOpt.id,
+      lpName: lpOpt.name,
+      alpId: alpOpt ? alpOpt.id : null,
+      alpName: alpOpt ? alpOpt.name : null,
+    });
+    // Parent typically closes the modal in response. We don't call
+    // onClose() here so the parent retains full control.
   }
 
   // Derived guards for the submit button.
@@ -123,8 +192,10 @@ export function AssignCrewModal({
     !loading &&
     !!eligible &&
     !!lpId &&
-    (!requiresAlp || !!alpId) &&
-    !submitting;
+    (!requiresAlp || !!alpId);
+  // Reset is only meaningful when the buffered picks differ from the
+  // modal's initial values (fresh: both null; re-edit: originally staged).
+  const canReset = lpId !== initialLpId || alpId !== initialAlpId;
 
   return (
     <Modal
@@ -140,17 +211,24 @@ export function AssignCrewModal({
       }
       footer={
         <>
-          <Button variant="text" onClick={close} disabled={submitting}>
+          <Button variant="text" onClick={close}>
             Cancel
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={reset}
+            disabled={!canReset}
+          >
+            Reset
           </Button>
           <Button
             variant="primary"
             size="cta"
             fullWidth
-            onClick={submit}
+            onClick={save}
             disabled={!canSubmit}
           >
-            {submitting ? 'Assigning…' : 'Assign'}
+            Save
           </Button>
         </>
       }
@@ -179,11 +257,18 @@ export function AssignCrewModal({
               <>
                 <EligibleCrewSelect
                   id={id}
-                  options={eligible.loco_pilots.eligible}
+                  options={lpOptions}
                   value={lpId}
                   onChange={setLpId}
                 />
-                <HiddenCrewFootnote counts={eligible.loco_pilots.hidden} />
+                <HiddenCrewFootnote
+                  counts={{
+                    ...eligible.loco_pilots.hidden,
+                    alreadyAssigned:
+                      eligible.loco_pilots.hidden.alreadyAssigned +
+                      lpStagedHidden,
+                  }}
+                />
               </>
             )}
           </FormField>
@@ -194,12 +279,17 @@ export function AssignCrewModal({
                 <>
                   <EligibleCrewSelect
                     id={id}
-                    options={eligible.assistant_loco_pilots!.eligible}
+                    options={alpOptions}
                     value={alpId}
                     onChange={setAlpId}
                   />
                   <HiddenCrewFootnote
-                    counts={eligible.assistant_loco_pilots!.hidden}
+                    counts={{
+                      ...eligible.assistant_loco_pilots!.hidden,
+                      alreadyAssigned:
+                        eligible.assistant_loco_pilots!.hidden.alreadyAssigned +
+                        alpStagedHidden,
+                    }}
                   />
                 </>
               )}

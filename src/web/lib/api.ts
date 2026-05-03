@@ -18,6 +18,7 @@ import type {
   ApiErrorResponse,
   AssignCrewInput,
   AssignmentRow,
+  AssignmentUpdateInput,
   CrewRow,
   EligibleCrewResponse,
   LeaveCreateInput,
@@ -239,6 +240,17 @@ export const assignments = {
     request<unknown>('/api/assignments', {
       method: 'POST',
       jsonBody: input,
+    }),
+
+  /**
+   * Edit an active assignment — swap LP and/or ALP. Same rule errors as
+   * `create`. The Edit modal buffers changes locally and only calls this
+   * when the user clicks Save (no auto-save on field change).
+   */
+  update: (id: string, patch: AssignmentUpdateInput) =>
+    request<unknown>(`/api/assignments/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      jsonBody: patch,
     }),
 
   archive: (id: string) =>

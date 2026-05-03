@@ -260,6 +260,31 @@ export const AssignCrewInput = z.object({
 export type AssignCrewInput = z.infer<typeof AssignCrewInput>;
 
 // ---------------------------------------------------------------------------
+// Assignment — update (PUT)
+// ---------------------------------------------------------------------------
+
+/**
+ * Edit-an-assignment payload. Only crew slots are mutable through the UI —
+ * the train + runDate uniqueness key is intentionally fixed (re-assigning to
+ * a different train means archiving the old assignment and creating a new
+ * one). All fields optional so an operator can change just the LP or just
+ * the ALP. The orchestrator re-runs eligibility / rest / leave / window
+ * checks against the existing run window before persisting.
+ *
+ * `alpId: null` explicitly clears the ALP slot (only valid for MEMU/DEMU
+ * mistakes — the orchestrator rejects it for ALP-required trains).
+ */
+export const AssignmentUpdateInput = z
+  .object({
+    lpId: nonEmptyString.optional(),
+    alpId: nonEmptyString.nullable().optional(),
+  })
+  .refine((v) => v.lpId !== undefined || v.alpId !== undefined, {
+    message: 'at least one of lpId / alpId must be supplied',
+  });
+export type AssignmentUpdateInput = z.infer<typeof AssignmentUpdateInput>;
+
+// ---------------------------------------------------------------------------
 // Query params
 // ---------------------------------------------------------------------------
 
@@ -378,6 +403,13 @@ export interface AssignmentRow {
     | null                          // eligible-but-empty → "Not assigned"
     | 'NOT_REQUIRED';               // MEMU/DEMU sentinel
   isAssignable: boolean;
+  /**
+   * The id of the **currently active** assignment for `(trainId, runDate)`,
+   * or `null` if no crew has been assigned yet. Drives the Edit / Delete
+   * row actions on the Assignments tab — the SPA uses this to target
+   * `PUT /api/assignments/:id` and `POST /api/assignments/:id/archive`.
+   */
+  assignmentId: string | null;
 }
 
 /**

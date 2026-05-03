@@ -162,6 +162,9 @@ export function assignmentRowForTrain(
     lp,
     alp,
     isAssignable,
+    // Active assignment id powers the Edit / Delete row actions. `null`
+    // when nothing has been assigned to this train + runDate yet.
+    assignmentId: current ? current.id : null,
   };
 }
 

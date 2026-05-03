@@ -65,7 +65,18 @@ export interface TrainRepo {
 }
 
 export interface AssignmentRepo {
+  findById(id: string, opts?: ActiveFilter): Promise<Assignment | null>;
   create(a: Omit<Assignment, 'id' | 'createdAt' | 'archivedAt'>): Promise<Assignment>;
+  /**
+   * Patch the crew on an existing active assignment. The (trainId, runDate)
+   * uniqueness key and timestamps are immutable through this path — only
+   * `lpId` and `alpId` may be modified. `alpId: null` clears the slot.
+   * Throws if `id` is not found or already archived.
+   */
+  update(
+    id: string,
+    patch: { lpId?: string; alpId?: string | null },
+  ): Promise<Assignment>;
   list(opts?: ActiveFilter & { departingWithin?: DateRange }): Promise<Assignment[]>;
   /** Returns active assignments held by this LP or ALP (used for window-conflict checks). */
   listByCrew(crewId: string, opts?: ActiveFilter): Promise<Assignment[]>;

@@ -24,6 +24,7 @@ import {
   FilteredOutReason,
   listCrewForAssignment,
 } from '../application/listCrewForAssignment';
+import { updateAssignment } from '../application/updateAssignment';
 import { requiresAlp } from '../domain/requiresAlp';
 import {
   AssignmentRepo,
@@ -40,6 +41,7 @@ import {
 } from '../domain/types';
 import {
   AssignCrewInput,
+  AssignmentUpdateInput,
   DateQuery,
   EligibleCrewResponse,
   HiddenCount,
@@ -149,6 +151,45 @@ export function createAssignmentsRouter(deps: AssignmentsRouterDeps): Router {
         return;
       }
       res.status(201).json(serializeAssignment(result.value));
+    }),
+  );
+
+  // -------------------------------------------------------------------------
+  // PUT /api/assignments/:id
+  // -------------------------------------------------------------------------
+  // Edit-an-assignment — swap LP and/or ALP on an existing active row. The
+  // orchestrator re-runs eligibility / leave / rest / window checks so the
+  // invariants are identical to POST /api/assignments. Rule violations
+  // surface as 422 with `{ code, ...ctx }`; the row's archived state
+  // surfaces as 409 (tampering by a stale tab).
+  router.put(
+    '/:id',
+    asyncHandler(async (req, res) => {
+      const id = requireParam(req, 'id');
+      const patch = AssignmentUpdateInput.parse(req.body);
+
+      const existing = await deps.assignments.findById(id, {
+        includeArchived: true,
+      });
+      if (!existing) throw new NotFoundError('ASSIGNMENT', id);
+      if (existing.archivedAt) {
+        res.status(409).json({
+          code: 'ASSIGNMENT_ARCHIVED',
+          assignmentId: id,
+        });
+        return;
+      }
+
+      const result = await updateAssignment(deps, {
+        assignmentId: id,
+        ...(patch.lpId !== undefined ? { lpId: patch.lpId } : {}),
+        ...(patch.alpId !== undefined ? { alpId: patch.alpId } : {}),
+      });
+      if (!result.ok) {
+        sendRuleError(res, result.error);
+        return;
+      }
+      res.json(serializeAssignment(result.value));
     }),
   );
 

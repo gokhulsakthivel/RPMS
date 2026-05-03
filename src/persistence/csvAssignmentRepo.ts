@@ -44,6 +44,17 @@ export class CsvAssignmentRepo implements AssignmentRepo {
     this.filePath = path.join(dataDir, 'assignments.csv');
   }
 
+  async findById(
+    id: string,
+    opts: ActiveFilter = {},
+  ): Promise<Assignment | null> {
+    const all = await this.readAll();
+    const found = all.find((a) => a.id === id);
+    if (!found) return null;
+    if (!opts.includeArchived && found.archivedAt) return null;
+    return found;
+  }
+
   async create(
     a: Omit<Assignment, 'id' | 'createdAt' | 'archivedAt'>,
   ): Promise<Assignment> {
@@ -62,6 +73,41 @@ export class CsvAssignmentRepo implements AssignmentRepo {
       encodeAssignment(row),
     ]);
     return row;
+  }
+
+  async update(
+    id: string,
+    patch: { lpId?: string; alpId?: string | null },
+  ): Promise<Assignment> {
+    let updated: Assignment | null = null;
+    await mutateCsv(this.filePath, ASSIGNMENTS_HEADER, (rows) => {
+      let saw = false;
+      const next = rows.map((r) => {
+        if (r['id'] !== id) return r;
+        saw = true;
+        if (r['archivedAt'] !== '') {
+          throw new Error(
+            `CsvAssignmentRepo.update: cannot update archived assignment (id=${id})`,
+          );
+        }
+        const merged: CsvRow = { ...r };
+        if (patch.lpId !== undefined) merged['lpId'] = patch.lpId;
+        if (patch.alpId !== undefined) {
+          merged['alpId'] = patch.alpId === null ? '' : patch.alpId;
+        }
+        updated = decodeAssignment(merged);
+        return merged;
+      });
+      if (!saw) {
+        throw new Error(`CsvAssignmentRepo.update: id not found: ${id}`);
+      }
+      return next;
+    });
+    // `updated` is set inside the mutator above for the row that matched.
+    if (!updated) {
+      throw new Error(`CsvAssignmentRepo.update: id not found: ${id}`);
+    }
+    return updated;
   }
 
   async list(
