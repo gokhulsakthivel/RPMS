@@ -22,7 +22,13 @@ import {
   readCsvUnlocked,
 } from './csvIo';
 
-/** LLD §5.3 — exact column order. M9 adds `runDate` after `trainId`. */
+/**
+ * LLD §5.3 — exact column order. M9 adds `runDate` after `trainId`.
+ * `previousLpSignOffTime` / `previousAlpSignOffTime` snapshot each crew
+ * member's `lastSignOffTime` at the moment THIS assignment stamped a new
+ * value, so archive / re-edit can roll the rest clock back. Empty cells mean
+ * the crew had never signed off before this row.
+ */
 const ASSIGNMENTS_HEADER = [
   'id',
   'trainId',
@@ -31,6 +37,8 @@ const ASSIGNMENTS_HEADER = [
   'alpId',
   'departureTime',
   'signOffTime',
+  'previousLpSignOffTime',
+  'previousAlpSignOffTime',
   'createdAt',
   'archivedAt',
 ] as const;
@@ -77,7 +85,12 @@ export class CsvAssignmentRepo implements AssignmentRepo {
 
   async update(
     id: string,
-    patch: { lpId?: string; alpId?: string | null },
+    patch: {
+      lpId?: string;
+      alpId?: string | null;
+      previousLpSignOffTime?: Date | null;
+      previousAlpSignOffTime?: Date | null;
+    },
   ): Promise<Assignment> {
     let updated: Assignment | null = null;
     await mutateCsv(this.filePath, ASSIGNMENTS_HEADER, (rows) => {
@@ -94,6 +107,18 @@ export class CsvAssignmentRepo implements AssignmentRepo {
         if (patch.lpId !== undefined) merged['lpId'] = patch.lpId;
         if (patch.alpId !== undefined) {
           merged['alpId'] = patch.alpId === null ? '' : patch.alpId;
+        }
+        if (patch.previousLpSignOffTime !== undefined) {
+          merged['previousLpSignOffTime'] =
+            patch.previousLpSignOffTime === null
+              ? ''
+              : encodeDate(patch.previousLpSignOffTime);
+        }
+        if (patch.previousAlpSignOffTime !== undefined) {
+          merged['previousAlpSignOffTime'] =
+            patch.previousAlpSignOffTime === null
+              ? ''
+              : encodeDate(patch.previousAlpSignOffTime);
         }
         updated = decodeAssignment(merged);
         return merged;
@@ -213,6 +238,14 @@ function decodeAssignment(row: CsvRow): Assignment {
     archivedAt: decodeDate(row['archivedAt'] ?? ''),
   };
   if (alpId !== '') assignment.alpId = alpId;
+  // The two sign-off snapshots are optional: an empty cell means the
+  // corresponding crew member had never signed off before this row, so the
+  // domain field stays `undefined`. The columns also tolerate legacy rows
+  // written before the schema was extended (no cell at all → also `undefined`).
+  const prevLp = decodeDate(row['previousLpSignOffTime'] ?? '');
+  if (prevLp) assignment.previousLpSignOffTime = prevLp;
+  const prevAlp = decodeDate(row['previousAlpSignOffTime'] ?? '');
+  if (prevAlp) assignment.previousAlpSignOffTime = prevAlp;
   return assignment;
 }
 
@@ -225,6 +258,8 @@ function encodeAssignment(a: Assignment): CsvRow {
     alpId: a.alpId ?? '',
     departureTime: encodeDate(a.departureTime),
     signOffTime: encodeDate(a.signOffTime),
+    previousLpSignOffTime: encodeDate(a.previousLpSignOffTime),
+    previousAlpSignOffTime: encodeDate(a.previousAlpSignOffTime),
     createdAt: encodeDate(a.createdAt),
     archivedAt: encodeDate(a.archivedAt),
   };

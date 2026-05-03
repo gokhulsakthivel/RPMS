@@ -18,6 +18,7 @@
 // assignments by `runDate === date`.
 
 import { Router } from 'express';
+import { archiveAssignment } from '../application/archiveAssignment';
 import { assignCrew } from '../application/assignCrew';
 import {
   CrewForAssignmentResult,
@@ -200,14 +201,16 @@ export function createAssignmentsRouter(deps: AssignmentsRouterDeps): Router {
     '/:id/archive',
     asyncHandler(async (req, res) => {
       const id = requireParam(req, 'id');
-      // No findById on AssignmentRepo — `archive` will throw if missing,
-      // which the error middleware turns into a 500. We do a defensive
-      // existence check via list+filter so the operator gets a clean 404.
-      const all = await deps.assignments.list({ includeArchived: true });
-      if (!all.some((a) => a.id === id)) {
-        throw new NotFoundError('ASSIGNMENT', id);
-      }
-      await deps.assignments.archive(id);
+      // Defensive existence check so the operator gets a clean 404 instead
+      // of a 500 when archiving a typo'd id.
+      const existing = await deps.assignments.findById(id, {
+        includeArchived: true,
+      });
+      if (!existing) throw new NotFoundError('ASSIGNMENT', id);
+      // Delegate to the orchestrator — it rolls each crew member's
+      // `lastSignOffTime` back to the snapshot captured at create-time
+      // before archiving the row.
+      await archiveAssignment(deps, id);
       res.status(204).end();
     }),
   );

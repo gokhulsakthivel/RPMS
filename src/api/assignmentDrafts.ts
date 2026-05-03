@@ -20,6 +20,7 @@
 // eligibility/rest/leave checks.
 
 import { Router } from 'express';
+import { archiveAssignment } from '../application/archiveAssignment';
 import { assignCrew } from '../application/assignCrew';
 import { updateAssignment } from '../application/updateAssignment';
 import {
@@ -231,11 +232,12 @@ async function commitOne(
         id: d.assignmentId,
       });
     }
-    if (!existing.archivedAt) {
-      await deps.assignments.archive(d.assignmentId);
-    }
-    // Idempotent: archiving an already-archived row is treated as success
-    // — the operator's intent is already satisfied. Drop the draft.
+    // Delegate to the orchestrator — it rolls the LP/ALP rest clocks back
+    // to the snapshot captured at create-time before archiving the row.
+    // The orchestrator is idempotent on already-archived assignments, so a
+    // stale draft against a row another operator has already archived
+    // succeeds without double-rolling the rest clocks.
+    await archiveAssignment(deps, d.assignmentId);
     await deps.drafts.delete(d.id);
     return { trainId: d.trainId, success: true };
   } catch (e) {

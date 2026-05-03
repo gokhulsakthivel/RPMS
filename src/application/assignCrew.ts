@@ -244,6 +244,12 @@ export async function assignCrew(
   // updates are best-effort; a hard failure here surfaces as a 500 to the
   // operator, but the train will not be re-assignable to the same crew until
   // the operator either retries or uses the manual override (HLD §4.7).
+  //
+  // The Assignment row also snapshots whatever `lastSignOffTime` each crew
+  // member carried *before* this stamp, so a later edit/archive can roll
+  // their rest clock back to that pre-assignment value. Brand-new crew
+  // (no prior sign-off) snapshot as `undefined` and survive the round trip
+  // through the CSV as an empty cell.
   const created = await deps.assignments.create({
     trainId: train.id,
     runDate: input.runDate,
@@ -251,6 +257,12 @@ export async function assignCrew(
     alpId: alp?.id,
     departureTime: departureTimeUtc,
     signOffTime: signOffTimeUtc,
+    ...(lp.lastSignOffTime
+      ? { previousLpSignOffTime: lp.lastSignOffTime }
+      : {}),
+    ...(alp?.lastSignOffTime
+      ? { previousAlpSignOffTime: alp.lastSignOffTime }
+      : {}),
   });
 
   await deps.lps.updateLastSignOff(lp.id, signOffTimeUtc);

@@ -152,6 +152,20 @@ export interface Assignment {
    * `train.inwardArrivalDayOffset` + `runDate` at create time.
    */
   signOffTime: Date;
+  /**
+   * Snapshot of the LP's `lastSignOffTime` *before* this assignment stamped
+   * a new value on it. Captured at create-time and rotated when the LP is
+   * swapped via `updateAssignment`. On archive (delete) this value is
+   * restored to the LP so their rest clock returns to its pre-assignment
+   * state. `undefined` means the LP had never signed off before this row.
+   */
+  previousLpSignOffTime?: Date;
+  /**
+   * Snapshot of the ALP's `lastSignOffTime` *before* this assignment. Same
+   * rotate-on-edit / restore-on-delete semantics as `previousLpSignOffTime`.
+   * Always `undefined` when the assignment carries no ALP (MEMU/DEMU).
+   */
+  previousAlpSignOffTime?: Date;
   /** UTC. */
   createdAt: Date;
   /** UTC; undefined for active rows. */

@@ -20,9 +20,16 @@
 // Out of scope:
 //   - changing trainId or runDate. Operators wanting to move a crew to a
 //     different train must archive + re-create.
-//   - rolling back the OLD crew's `lastSignOffTime`. Historic sign-offs are
-//     monotonic by design (HLD §4.7 — manual override exists for explicit
-//     corrections).
+//
+// Rest-clock rollback (was previously out of scope):
+//   When the LP and/or ALP slot is replaced or cleared, the orchestrator now
+//   restores the OLD crew member's `lastSignOffTime` to the snapshot captured
+//   on this assignment row at create-time (`previousLpSignOffTime` /
+//   `previousAlpSignOffTime`). The NEW crew member's *current* sign-off is
+//   then snapshotted into the row (rotating the field) before their own
+//   `lastSignOffTime` is stamped to this run's sign-off. This keeps the
+//   snapshot one-deep — exactly enough to undo this single Edit/Delete —
+//   while preserving the audit trail in the CSV.
 
 import { hasSufficientRest, MIN_REST_HOURS } from '../domain/hasSufficientRest';
 import { findWindowConflict } from '../domain/hasWindowConflict';
@@ -256,17 +263,57 @@ export async function updateAssignment(
     return err({ code: 'ALP_NOT_ALLOWED', trainType: train.type });
   }
 
+  // ------- Restore the old slot-holder's `lastSignOffTime` from the snapshot
+  //         we took when THIS assignment was created. We capture the new
+  //         slot-holder's current sign-off into a fresh snapshot in the same
+  //         repo write so the row tracks exactly one level of history.
+  const patch: {
+    lpId?: string;
+    alpId?: string | null;
+    previousLpSignOffTime?: Date | null;
+    previousAlpSignOffTime?: Date | null;
+  } = {};
+
+  if (lpChanged) {
+    patch.lpId = lp.id;
+    // Capture the new LP's PRE-stamp sign-off into the row's snapshot before
+    // we overwrite it on the LP record below. `null` clears the cell (= "this
+    // person had never signed off before").
+    patch.previousLpSignOffTime = lp.lastSignOffTime ?? null;
+    // Restore the old LP's `lastSignOffTime` to whatever it was before this
+    // assignment first stamped it. Brand-new old LPs (no prior) get their
+    // `lastSignOffTime` cleared so the rest rule treats them as un-stamped.
+    await deps.lps.update(existing.lpId, {
+      lastSignOffTime: existing.previousLpSignOffTime,
+    });
+  }
+
+  if (input.alpId !== undefined) {
+    patch.alpId = alp ? alp.id : null;
+    // Old ALP was set and is being replaced or cleared — roll their
+    // sign-off back. (The new ALP being the SAME person is impossible here
+    // because alpChanged would be false in that case.)
+    if (existing.alpId && (!alp || alp.id !== existing.alpId)) {
+      await deps.alps.update(existing.alpId, {
+        lastSignOffTime: existing.previousAlpSignOffTime,
+      });
+    }
+    if (alp && alp.id !== existing.alpId) {
+      // Brand-new ALP for this row — capture their pre-stamp sign-off.
+      patch.previousAlpSignOffTime = alp.lastSignOffTime ?? null;
+    } else if (!alp && existing.alpId) {
+      // Slot cleared — drop the snapshot too.
+      patch.previousAlpSignOffTime = null;
+    }
+  }
+
   // ------- Persist. Repo's `update` is the single CSV-write site.
-  const updated = await deps.assignments.update(existing.id, {
-    ...(lpChanged ? { lpId: lp.id } : {}),
-    ...(input.alpId !== undefined
-      ? { alpId: alp ? alp.id : null }
-      : {}),
-  });
+  const updated = await deps.assignments.update(existing.id, patch);
 
   // ------- Sign-off cascade. Mirror `assignCrew`'s post-persist updates —
-  //         only for crew that actually changed. The previous slot-holder's
-  //         `lastSignOffTime` is intentionally left as-is (see HLD §4.7).
+  //         only for crew that actually changed. The OLD slot-holder was
+  //         already restored above; the new slot-holder takes the run's
+  //         sign-off here.
   if (lpChanged) {
     await deps.lps.updateLastSignOff(lp.id, signOffTimeUtc);
   }
