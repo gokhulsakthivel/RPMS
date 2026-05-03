@@ -6,6 +6,8 @@
 import {
   Assignment,
   AssistantLocoPilot,
+  CrewRole,
+  Leave,
   LocoPilot,
   Train,
 } from './types';
@@ -68,5 +70,28 @@ export interface AssignmentRepo {
   /** Returns active assignments held by this LP or ALP (used for window-conflict checks). */
   listByCrew(crewId: string, opts?: ActiveFilter): Promise<Assignment[]>;
   listByTrain(trainId: string, opts?: ActiveFilter): Promise<Assignment[]>;
+  archive(id: string): Promise<void>;
+}
+
+/**
+ * Leave windows for a single crew member — see HLD §4.4.
+ *
+ * The `Leave` record discriminates LP vs. ALP via `crewRole` so a single
+ * repo serves both rosters. Reads are typically `listByCrew(crewId)` from
+ * the assignment orchestrator and `list()` from the Leaves UI.
+ */
+export interface LeaveRepo {
+  findById(id: string, opts?: ActiveFilter): Promise<Leave | null>;
+  list(opts?: ActiveFilter): Promise<Leave[]>;
+  /** All non-archived leaves for one crew member, regardless of role. */
+  listByCrew(crewId: string, opts?: ActiveFilter): Promise<Leave[]>;
+  /**
+   * All non-archived leaves whose `[fromDate, toDate]` window includes
+   * `runDate` (IST `YYYY-MM-DD`). Optionally narrow by role to avoid
+   * cross-roster scans when the caller is projecting LP- or ALP-only.
+   */
+  listCoveringDate(runDate: string, opts?: ActiveFilter & { crewRole?: CrewRole }): Promise<Leave[]>;
+  create(input: Omit<Leave, 'id' | 'createdAt' | 'archivedAt'>): Promise<Leave>;
+  update(id: string, patch: Partial<Omit<Leave, 'id' | 'createdAt'>>): Promise<Leave>;
   archive(id: string): Promise<void>;
 }

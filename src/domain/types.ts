@@ -42,6 +42,27 @@ export enum DayOfWeek {
  */
 export type TimeOfDayString = string;
 
+/**
+ * Reason a crew member is unavailable on a calendar window.
+ *
+ * Sick leave, planned leave, and training all map to the same eligibility
+ * outcome — the crew member cannot be assigned to a run whose `runDate`
+ * falls within `[fromDate, toDate]`. The label is preserved for reporting
+ * and for the rejection reason surfaced in the UI.
+ */
+export enum LeaveType {
+  SICK     = 'SICK',
+  LEAVE    = 'LEAVE',
+  TRAINING = 'TRAINING',
+}
+
+/**
+ * Crew role a leave window applies to. Discriminator on `Leave.crewRole`
+ * so a single repo serves both the LP and ALP rosters without joining
+ * across workforce tables.
+ */
+export type CrewRole = 'LP' | 'ALP';
+
 // ---------------------------------------------------------------------------
 // 2. Domain Model
 // ---------------------------------------------------------------------------
@@ -137,6 +158,36 @@ export interface Assignment {
   archivedAt?: Date;
 }
 
+/**
+ * A calendar window during which a single crew member (LP or ALP) is
+ * unavailable. The window is **inclusive on both ends** in IST calendar
+ * dates — `fromDate <= runDate <= toDate` blocks a run.
+ *
+ * The shape is intentionally flat: one row per window per crew member.
+ * Renewing or extending a leave creates a new row rather than mutating
+ * an existing one, keeping the ledger append-friendly.
+ *
+ * Soft-archive only: `archivedAt` retracts the window without losing
+ * the audit trail.
+ */
+export interface Leave {
+  id: string;
+  /** LP.id or ALP.id depending on `crewRole`. */
+  crewId: string;
+  crewRole: CrewRole;
+  type: LeaveType;
+  /** Inclusive start, IST `YYYY-MM-DD`. */
+  fromDate: string;
+  /** Inclusive end, IST `YYYY-MM-DD`. MUST be `>= fromDate`. */
+  toDate: string;
+  /** Free-text note for operators. Optional. */
+  reason?: string;
+  /** UTC. */
+  createdAt: Date;
+  /** UTC; undefined for active rows. */
+  archivedAt?: Date;
+}
+
 // ---------------------------------------------------------------------------
 // 4. Error Contract — structured, never raw strings.
 // ---------------------------------------------------------------------------
@@ -152,7 +203,9 @@ export type AssignmentError =
   | { code: 'ALP_NOT_ALLOWED'; trainType: TrainType }
   | { code: 'ARCHIVED_ENTITY'; entity: 'TRAIN' | 'LP' | 'ALP'; id: string }
   | { code: 'TRAIN_DOES_NOT_RUN_ON_DAY'; trainId: string; runDate: string; dayOfWeek: DayOfWeek }
-  | { code: 'ALREADY_ASSIGNED'; trainId: string; runDate: string; conflictingAssignmentId: string };
+  | { code: 'ALREADY_ASSIGNED'; trainId: string; runDate: string; conflictingAssignmentId: string }
+  | { code: 'LP_ON_LEAVE'; lpId: string; leaveType: LeaveType; fromDate: string; toDate: string }
+  | { code: 'ALP_ON_LEAVE'; alpId: string; leaveType: LeaveType; fromDate: string; toDate: string };
 
 export type AssignmentErrorCode = AssignmentError['code'];
 

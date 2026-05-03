@@ -7,7 +7,7 @@
 // `Date` instances.
 
 import { z } from 'zod';
-import { DayOfWeek, LpCategory, TrainType } from '../domain/types';
+import { DayOfWeek, LeaveType, LpCategory, TrainType } from '../domain/types';
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -28,6 +28,8 @@ const isoCalendarDate = z
 const trainTypeSchema = z.nativeEnum(TrainType);
 const lpCategorySchema = z.nativeEnum(LpCategory);
 const dayOfWeekSchema = z.nativeEnum(DayOfWeek);
+const leaveTypeSchema = z.nativeEnum(LeaveType);
+const crewRoleSchema = z.enum(['LP', 'ALP']);
 
 /**
  * IST time-of-day, 24h `HH:MM`. Used by the recurring train schedule (M9):
@@ -159,6 +161,83 @@ export const AlpUpdateInput = z.object({
   lastSignOffTime: isoUtcDate.nullable().optional(),
 });
 export type AlpUpdateInput = z.infer<typeof AlpUpdateInput>;
+
+// ---------------------------------------------------------------------------
+// Leave — create / update
+// ---------------------------------------------------------------------------
+
+/**
+ * `[fromDate, toDate]` is **inclusive** on both ends in IST `YYYY-MM-DD`.
+ * The cross-field refinement guarantees `toDate >= fromDate` so the UI
+ * cannot silently submit an empty window.
+ */
+const leaveDateRange = z
+  .object({
+    fromDate: isoCalendarDate,
+    toDate: isoCalendarDate,
+  })
+  .refine((v) => v.toDate >= v.fromDate, {
+    message: 'toDate must be on or after fromDate',
+    path: ['toDate'],
+  });
+
+/**
+ * Optional reason note. Trimmed and capped to keep CSV rows readable.
+ * Empty string is normalised to `undefined` so the wire shape never
+ * carries a meaningless blank.
+ */
+const reasonField = z
+  .string()
+  .trim()
+  .max(200, 'reason must be ≤ 200 characters')
+  .optional()
+  .transform((v) => (v && v.length > 0 ? v : undefined));
+
+export const LeaveCreateInput = z
+  .object({
+    crewId: nonEmptyString,
+    crewRole: crewRoleSchema,
+    type: leaveTypeSchema,
+    reason: reasonField,
+  })
+  .and(leaveDateRange);
+export type LeaveCreateInput = z.infer<typeof LeaveCreateInput>;
+
+/**
+ * Update accepts everything optional, including the date window — but if
+ * either endpoint is supplied, both must be (and the inclusive-order rule
+ * is re-checked). Operators changing only `reason` or `type` skip the
+ * date pair entirely.
+ */
+export const LeaveUpdateInput = z
+  .object({
+    crewId: nonEmptyString.optional(),
+    crewRole: crewRoleSchema.optional(),
+    type: leaveTypeSchema.optional(),
+    fromDate: isoCalendarDate.optional(),
+    toDate: isoCalendarDate.optional(),
+    reason: reasonField,
+  })
+  .refine(
+    (v) =>
+      (v.fromDate === undefined && v.toDate === undefined) ||
+      (v.fromDate !== undefined && v.toDate !== undefined),
+    {
+      message: 'fromDate and toDate must be supplied together',
+      path: ['toDate'],
+    },
+  )
+  .refine(
+    (v) =>
+      v.fromDate === undefined ||
+      v.toDate === undefined ||
+      v.toDate >= v.fromDate,
+    {
+      message: 'toDate must be on or after fromDate',
+      path: ['toDate'],
+    },
+  );
+export type LeaveUpdateInput = z.infer<typeof LeaveUpdateInput>;
 
 // ---------------------------------------------------------------------------
 // Assignment — create
@@ -323,11 +402,41 @@ export type LpWithRestStatus = CrewRow & { kind: 'LP' };
 export type AlpWithRestStatus = CrewRow & { kind: 'ALP' };
 
 /**
- * Bucket counts that drive the "Hidden: 8 not eligible, 3 still resting,
- * 1 already assigned" footnote (components.md §`HiddenCrewFootnote`).
+ * Server projection for the Leaves tab (HLD §4.4 / design.md §9.5).
+ *
+ * Crew identity is denormalised onto the row so the table renders without
+ * a second fetch. `crewName` is the display name resolved at projection
+ * time; if the underlying crew record is later renamed the leave row
+ * reflects the new name on the next list call. Archived leaves are
+ * excluded by default — the toggle for showing them lives in the page,
+ * not the wire shape.
+ */
+export interface LeaveRow {
+  id: string;
+  crewId: string;
+  crewRole: 'LP' | 'ALP';
+  /** Resolved at projection time. `'(unknown)'` if the crew record is missing. */
+  crewName: string;
+  type: LeaveType;
+  /** Inclusive IST `YYYY-MM-DD`. */
+  fromDate: string;
+  /** Inclusive IST `YYYY-MM-DD`. */
+  toDate: string;
+  /** Optional free-text note; absent when blank. */
+  reason?: string;
+  /** ISO-8601 UTC. */
+  createdAt: string;
+}
+
+/**
+ * Bucket counts that drive the "Hidden: 8 not eligible, 2 on leave,
+ * 3 still resting, 1 already assigned" footnote (components.md
+ * §`HiddenCrewFootnote`). New buckets sit alongside the originals so the
+ * footnote can mention any subset without reshaping the wire payload.
  */
 export interface HiddenCount {
   notEligible: number;
+  onLeave: number;
   resting: number;
   alreadyAssigned: number;
 }

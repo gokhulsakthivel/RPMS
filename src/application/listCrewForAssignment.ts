@@ -16,27 +16,31 @@ import { hasSufficientRest } from '../domain/hasSufficientRest';
 import { hasWindowConflict } from '../domain/hasWindowConflict';
 import { isAlpEligible } from '../domain/isAlpEligible';
 import { isLpEligible } from '../domain/isLpEligible';
+import { isOnLeave } from '../domain/isOnLeave';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
+  LeaveRepo,
   LocoPilotRepo,
   TrainRepo,
 } from '../domain/repositories';
 import { materializeRun, trainRunsOn } from '../domain/runSchedule';
-import { Train } from '../domain/types';
+import { CrewRole, Leave, Train } from '../domain/types';
 
 export interface ListCrewForAssignmentDeps {
   trains: TrainRepo;
   lps: LocoPilotRepo;
   alps: AssistantLocoPilotRepo;
   assignments: AssignmentRepo;
+  leaves: LeaveRepo;
 }
 
 /** A "filtered out" reason for the dropdown footnote. Same buckets for LP and ALP. */
 export type FilteredOutReason =
   | 'not_eligible'
   | 'still_resting'
-  | 'already_assigned';
+  | 'already_assigned'
+  | 'on_leave';
 
 export interface CrewOption {
   id: string;
@@ -86,17 +90,25 @@ export async function listCrewForAssignment(
 
   const { departureTimeUtc, signOffTimeUtc } = materializeRun(train, runDate);
 
+  // ------- Leaves covering `runDate`. Fetched once per role and indexed by
+  //         crewId so the classifier short-circuits with no extra I/O. The
+  //         repo applies the role filter so we never iterate the wrong set.
+  const lpLeaveIndex = await indexLeavesByCrew(deps.leaves, runDate, 'LP');
+  const alpLeaveIndex = await indexLeavesByCrew(deps.leaves, runDate, 'ALP');
+
   // ------- LP candidates.
   const allLps = await deps.lps.list(); // active only by default
   const lpResult = await classifyCandidates({
     train,
     departureTimeUtc,
     signOffTimeUtc,
+    runDate,
     candidates: allLps.map((lp) => ({
       id: lp.id,
       name: lp.name,
       lastSignOffTime: lp.lastSignOffTime,
       isEligible: isLpEligible(lp, train.type),
+      leavesForDate: lpLeaveIndex.get(lp.id) ?? [],
     })),
     fetchAssignments: (id) => deps.assignments.listByCrew(id),
   });
@@ -111,11 +123,13 @@ export async function listCrewForAssignment(
     train,
     departureTimeUtc,
     signOffTimeUtc,
+    runDate,
     candidates: allAlps.map((alp) => ({
       id: alp.id,
       name: alp.name,
       lastSignOffTime: alp.lastSignOffTime,
       isEligible: isAlpEligible(alp, train.type),
+      leavesForDate: alpLeaveIndex.get(alp.id) ?? [],
     })),
     fetchAssignments: (id) => deps.assignments.listByCrew(id),
   });
@@ -138,12 +152,15 @@ interface Candidate {
   lastSignOffTime?: Date;
   /** Domain-level eligibility verdict; varies by LP vs ALP. */
   isEligible: boolean;
+  /** Non-archived leaves whose window covers `runDate`. May be empty. */
+  leavesForDate: ReadonlyArray<Leave>;
 }
 
 interface ClassifierInput {
   train: Train;
   departureTimeUtc: Date;
   signOffTimeUtc: Date;
+  runDate: string;
   candidates: Candidate[];
   fetchAssignments: (crewId: string) => Promise<{ departureTime: Date; signOffTime: Date }[]>;
 }
@@ -154,16 +171,23 @@ interface ClassifierResult {
 }
 
 async function classifyCandidates(input: ClassifierInput): Promise<ClassifierResult> {
-  const { departureTimeUtc, signOffTimeUtc, candidates, fetchAssignments } = input;
+  const { departureTimeUtc, signOffTimeUtc, runDate, candidates, fetchAssignments } = input;
 
   const eligible: CrewOption[] = [];
   const notEligible: string[] = [];
+  const onLeave: string[] = [];
   const stillResting: string[] = [];
   const alreadyAssigned: string[] = [];
 
   for (const c of candidates) {
     if (!c.isEligible) {
       notEligible.push(c.id);
+      continue;
+    }
+    // Leave check mirrors `assignCrew`'s precedence: surfaces before rest so
+    // the footnote attributes the rejection to the most specific reason.
+    if (isOnLeave(c.leavesForDate, runDate)) {
+      onLeave.push(c.id);
       continue;
     }
     if (!hasSufficientRest({ lastSignOffTime: c.lastSignOffTime }, departureTimeUtc)) {
@@ -190,9 +214,31 @@ async function classifyCandidates(input: ClassifierInput): Promise<ClassifierRes
   eligible.sort((a, b) => a.name.localeCompare(b.name));
 
   const filteredOut: FilteredOutBucket[] = [];
-  if (notEligible.length) filteredOut.push({ reason: 'not_eligible',     crewIds: notEligible });
-  if (stillResting.length) filteredOut.push({ reason: 'still_resting',    crewIds: stillResting });
+  if (notEligible.length)     filteredOut.push({ reason: 'not_eligible',     crewIds: notEligible });
+  if (onLeave.length)         filteredOut.push({ reason: 'on_leave',         crewIds: onLeave });
+  if (stillResting.length)    filteredOut.push({ reason: 'still_resting',    crewIds: stillResting });
   if (alreadyAssigned.length) filteredOut.push({ reason: 'already_assigned', crewIds: alreadyAssigned });
 
   return { eligible, filteredOut };
+}
+
+/**
+ * Build a `crewId → covering leaves` index for one `runDate`/role. Uses the
+ * repo's role-scoped query so the lookup table never carries cross-role
+ * rows. Multiple covering leaves per crew are preserved in case the UI
+ * later wants to surface "X is on TRAINING and SICK".
+ */
+async function indexLeavesByCrew(
+  repo: LeaveRepo,
+  runDate: string,
+  crewRole: CrewRole,
+): Promise<Map<string, Leave[]>> {
+  const covering = await repo.listCoveringDate(runDate, { crewRole });
+  const index = new Map<string, Leave[]>();
+  for (const l of covering) {
+    const existing = index.get(l.crewId);
+    if (existing) existing.push(l);
+    else index.set(l.crewId, [l]);
+  }
+  return index;
 }

@@ -8,6 +8,7 @@ import { AppShell } from './components/AppShell';
 import { SelectedDateProvider } from './lib/useSelectedDate';
 import { AssignmentsPage } from './pages/AssignmentsPage';
 import { CrewPage } from './pages/CrewPage';
+import { LeavesPage } from './pages/LeavesPage';
 import { TrainsPage } from './pages/TrainsPage';
 
 export function App() {
@@ -20,6 +21,7 @@ export function App() {
             <Route path="/trains"      element={<TrainsPage />} />
             <Route path="/crew"        element={<CrewPage />} />
             <Route path="/assignments" element={<AssignmentsPage />} />
+            <Route path="/leaves"      element={<LeavesPage />} />
             {/* Default + 404 → /trains. The plan calls out the redirect
                 explicitly (M6 step 2). */}
             <Route path="/"            element={<Navigate to="/trains" replace />} />

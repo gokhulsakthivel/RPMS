@@ -1,0 +1,14 @@
+.github/instructions/wmt-copilot.instructions.md
+
+# Node / build artefacts
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# Vite cache
+.vite/
+
+# CSV write lock (proper-lockfile)
+data/.lock
+data/*.tmp

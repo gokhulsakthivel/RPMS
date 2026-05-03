@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { CsvAssignmentRepo } from '../persistence/csvAssignmentRepo';
 import { CsvAssistantLocoPilotRepo } from '../persistence/csvAssistantLocoPilotRepo';
+import { CsvLeaveRepo } from '../persistence/csvLeaveRepo';
 import { CsvLocoPilotRepo } from '../persistence/csvLocoPilotRepo';
 import { CsvTrainRepo } from '../persistence/csvTrainRepo';
 import {
@@ -25,6 +26,7 @@ import {
 } from './assignments';
 import { createAssistantLocoPilotsRouter } from './assistantLocoPilots';
 import { errorMiddleware } from './errorMiddleware';
+import { createLeavesRouter } from './leaves';
 import { createLocoPilotsRouter } from './locoPilots';
 import { createSummaryRouter } from './summary';
 import { createTrainsRouter } from './trains';
@@ -51,8 +53,9 @@ const trains = new CsvTrainRepo(DATA_DIR);
 const lps = new CsvLocoPilotRepo(DATA_DIR);
 const alps = new CsvAssistantLocoPilotRepo(DATA_DIR);
 const assignments = new CsvAssignmentRepo(DATA_DIR);
+const leaves = new CsvLeaveRepo(DATA_DIR);
 
-const repoDeps = { trains, lps, alps, assignments };
+const repoDeps = { trains, lps, alps, assignments, leaves };
 
 // ---------------------------------------------------------------------------
 // App
@@ -81,6 +84,7 @@ export function createApp(): express.Express {
   app.use('/api/assistant-loco-pilots',   createAssistantLocoPilotsRouter({ alps }));
   app.use('/api/assignments',             createAssignmentsRouter(repoDeps));
   app.use('/api/eligible-crew',           createEligibleCrewRouter(repoDeps));
+  app.use('/api/leaves',                  createLeavesRouter({ leaves, lps, alps }));
   app.use('/api/summary',                 createSummaryRouter(repoDeps));
 
   // 404 for any unmatched /api/* — surfaces typos as a clean JSON response

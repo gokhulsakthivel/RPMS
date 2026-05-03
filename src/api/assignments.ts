@@ -28,6 +28,7 @@ import { requiresAlp } from '../domain/requiresAlp';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
+  LeaveRepo,
   LocoPilotRepo,
   TrainRepo,
 } from '../domain/repositories';
@@ -63,6 +64,7 @@ export interface AssignmentsRouterDeps {
   lps: LocoPilotRepo;
   alps: AssistantLocoPilotRepo;
   assignments: AssignmentRepo;
+  leaves: LeaveRepo;
 }
 
 export function createAssignmentsRouter(deps: AssignmentsRouterDeps): Router {
@@ -269,12 +271,20 @@ function indexById<T extends { id: string }>(entities: T[]): Map<string, T> {
 function bucketsToHiddenCount(
   buckets: CrewForAssignmentResult['filteredOutLps'],
 ): HiddenCount {
-  const counts: HiddenCount = { notEligible: 0, resting: 0, alreadyAssigned: 0 };
+  const counts: HiddenCount = {
+    notEligible: 0,
+    onLeave: 0,
+    resting: 0,
+    alreadyAssigned: 0,
+  };
   for (const b of buckets) {
     const reason: FilteredOutReason = b.reason;
     switch (reason) {
       case 'not_eligible':
         counts.notEligible = b.crewIds.length;
+        break;
+      case 'on_leave':
+        counts.onLeave = b.crewIds.length;
         break;
       case 'still_resting':
         counts.resting = b.crewIds.length;

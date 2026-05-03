@@ -20,6 +20,9 @@ import type {
   AssignmentRow,
   CrewRow,
   EligibleCrewResponse,
+  LeaveCreateInput,
+  LeaveRow,
+  LeaveUpdateInput,
   LocoPilotCreateInput,
   LocoPilotUpdateInput,
   SummaryResponse,
@@ -247,6 +250,31 @@ export const assignments = {
     request<EligibleCrewResponse>(
       `/api/eligible-crew?trainId=${encodeURIComponent(trainId)}&runDate=${encodeURIComponent(runDate)}`,
     ),
+};
+
+// ---------------------------------------------------------------------------
+// Leaves  →  /api/leaves
+// ---------------------------------------------------------------------------
+
+export const leaves = {
+  list: () => request<LeaveRow[]>('/api/leaves'),
+
+  create: (input: LeaveCreateInput) =>
+    request<LeaveRow>('/api/leaves', {
+      method: 'POST',
+      jsonBody: input,
+    }),
+
+  update: (id: string, patch: LeaveUpdateInput) =>
+    request<LeaveRow>(`/api/leaves/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      jsonBody: patch,
+    }),
+
+  archive: (id: string) =>
+    request<void>(`/api/leaves/${encodeURIComponent(id)}/archive`, {
+      method: 'POST',
+    }),
 };
 
 // ---------------------------------------------------------------------------

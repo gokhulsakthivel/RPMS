@@ -19,10 +19,12 @@ import { hasSufficientRest, MIN_REST_HOURS } from '../domain/hasSufficientRest';
 import { findWindowConflict } from '../domain/hasWindowConflict';
 import { isAlpEligible } from '../domain/isAlpEligible';
 import { isLpEligible } from '../domain/isLpEligible';
+import { findCoveringLeave } from '../domain/isOnLeave';
 import { requiresAlp } from '../domain/requiresAlp';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
+  LeaveRepo,
   LocoPilotRepo,
   TrainRepo,
 } from '../domain/repositories';
@@ -40,6 +42,7 @@ export interface AssignCrewDeps {
   lps: LocoPilotRepo;
   alps: AssistantLocoPilotRepo;
   assignments: AssignmentRepo;
+  leaves: LeaveRepo;
   /** Pluggable for tests / replay. Defaults to `() => new Date()`. */
   now?: () => Date;
 }
@@ -145,6 +148,22 @@ export async function assignCrew(
     });
   }
 
+  // ------- Step 1b: LP leave window. A non-archived Leave covering
+  //         `runDate` makes the LP unavailable regardless of rest or
+  //         certification (HLD §4.4). Checked before rest so the operator
+  //         sees the more specific reason first.
+  const lpLeaves = await deps.leaves.listByCrew(lp.id);
+  const lpOnLeave = findCoveringLeave(lpLeaves, input.runDate);
+  if (lpOnLeave) {
+    return err({
+      code: 'LP_ON_LEAVE',
+      lpId: lp.id,
+      leaveType: lpOnLeave.type,
+      fromDate: lpOnLeave.fromDate,
+      toDate: lpOnLeave.toDate,
+    });
+  }
+
   // ------- Step 2: LP rest. Anchored to the materialized UTC departure.
   if (!hasSufficientRest(lp, departureTimeUtc)) {
     return err({
@@ -180,6 +199,18 @@ export async function assignCrew(
         code: 'ALP_NOT_ELIGIBLE',
         alpId: alp.id,
         trainType: train.type,
+      });
+    }
+    // Mirror of the LP leave check — same precedence, same shape.
+    const alpLeaves = await deps.leaves.listByCrew(alp.id);
+    const alpOnLeave = findCoveringLeave(alpLeaves, input.runDate);
+    if (alpOnLeave) {
+      return err({
+        code: 'ALP_ON_LEAVE',
+        alpId: alp.id,
+        leaveType: alpOnLeave.type,
+        fromDate: alpOnLeave.fromDate,
+        toDate: alpOnLeave.toDate,
       });
     }
     if (!hasSufficientRest(alp, departureTimeUtc)) {

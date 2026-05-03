@@ -46,7 +46,7 @@ export function sendRuleError(res: Response, error: AssignmentError): Response {
  */
 export class NotFoundError extends Error {
   constructor(
-    readonly entity: 'TRAIN' | 'LP' | 'ALP' | 'ASSIGNMENT',
+    readonly entity: 'TRAIN' | 'LP' | 'ALP' | 'ASSIGNMENT' | 'LEAVE',
     readonly entityId: string,
   ) {
     super(`${entity} not found: ${entityId}`);

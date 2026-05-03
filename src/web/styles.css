@@ -53,6 +53,17 @@
   --accent-amrit-bharat-bg: #fce7f3;
   --accent-amrit-bharat-text:#9d174d;
 
+  /* ---------- 3.6 Leave Type Badges (design.md §9.5) ----------------- */
+  /* Sick — warm red so it reads as "out unwell" at a glance. */
+  --accent-sick-bg:         #fee2e2;
+  --accent-sick-text:       #991b1b;
+  /* Planned leave — neutral slate, distinct from Sick / Training. */
+  --accent-leave-bg:        #e0e7ff;
+  --accent-leave-text:      #3730a3;
+  /* Training — amber, mirrors the "in development" tone. */
+  --accent-training-bg:     #fef3c7;
+  --accent-training-text:   #854d0e;
+
   /* ---------- Typography scale (design.md §2.1 references) ----------- */
   --text-h1:      28px;
   --text-h2:      20px;
@@ -1228,4 +1239,65 @@ a:hover {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* ---------- Leaves: table cells (design.md §9.5) ----------------------- */
+.leave-table__crew {
+  display: inline-flex;
+  align-items: center;
+}
+.leave-table__date {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+.leave-table__reason {
+  color: var(--color-text);
+  word-break: break-word;
+}
+.leave-table__reason--empty {
+  color: var(--color-text-muted);
+}
+.leave-table__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* ---------- Leaves: form layout --------------------------------------- */
+.leave-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.leave-form__role {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.leave-form__role-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.leave-form__role-opt input[disabled] {
+  cursor: not-allowed;
+}
+.leave-form__role-locked {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.leave-form__date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.leave-form__crew-error {
+  margin: -8px 0 0;
+  font-size: var(--text-caption);
+  color: var(--color-danger);
 }

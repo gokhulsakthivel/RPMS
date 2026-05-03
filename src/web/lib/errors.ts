@@ -44,6 +44,10 @@ export function describeApiError(error: ApiError): string {
       return `This train doesn't run on ${formatDayOfWeek(context['dayOfWeek'])} (${formatDate(context['runDate'])}). Pick a date the train operates.`;
     case 'ALREADY_ASSIGNED':
       return `This train already has crew assigned for ${formatDate(context['runDate'])}. Archive the existing assignment first.`;
+    case 'LP_ON_LEAVE':
+      return `This LP is on ${formatLeaveType(context['leaveType'])} from ${formatDate(context['fromDate'])} to ${formatDate(context['toDate'])}.`;
+    case 'ALP_ON_LEAVE':
+      return `This ALP is on ${formatLeaveType(context['leaveType'])} from ${formatDate(context['fromDate'])} to ${formatDate(context['toDate'])}.`;
 
     // ---------------- API/HTTP layer ----------------
     case 'NOT_FOUND':
@@ -91,7 +95,18 @@ function formatEntity(value: unknown): string {
     case 'LP':         return 'Loco Pilot';
     case 'ALP':        return 'Assistant Loco Pilot';
     case 'ASSIGNMENT': return 'assignment';
+    case 'LEAVE':      return 'leave record';
     default:           return value.toLowerCase();
+  }
+}
+
+function formatLeaveType(value: unknown): string {
+  if (typeof value !== 'string') return 'leave';
+  switch (value) {
+    case 'SICK':     return 'sick leave';
+    case 'LEAVE':    return 'leave';
+    case 'TRAINING': return 'training';
+    default:         return value.toLowerCase();
   }
 }
 
