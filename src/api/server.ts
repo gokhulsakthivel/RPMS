@@ -27,6 +27,7 @@ import {
   createEligibleCrewRouter,
 } from './assignments';
 import { createAssistantLocoPilotsRouter } from './assistantLocoPilots';
+import { createCrewDiaryRouter } from './crewDiary';
 import { errorMiddleware } from './errorMiddleware';
 import { createLeavesRouter } from './leaves';
 import { createLocoPilotsRouter } from './locoPilots';
@@ -90,6 +91,7 @@ export function createApp(): express.Express {
   app.use('/api/assignment-drafts',       createAssignmentDraftsRouter(draftDeps));
   app.use('/api/eligible-crew',           createEligibleCrewRouter(repoDeps));
   app.use('/api/leaves',                  createLeavesRouter({ leaves, lps, alps }));
+  app.use('/api/crew-diary',              createCrewDiaryRouter({ trains, lps, alps, assignments }));
   app.use('/api/summary',                 createSummaryRouter(repoDeps));
 
   // 404 for any unmatched /api/* — surfaces typos as a clean JSON response

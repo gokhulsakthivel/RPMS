@@ -22,6 +22,7 @@ import type {
   AssignmentDraftStageInput,
   AssignmentRow,
   AssignmentUpdateInput,
+  CrewDiaryResponse,
   CrewRow,
   EligibleCrewResponse,
   LeaveCreateInput,
@@ -331,6 +332,26 @@ export const leaves = {
     request<void>(`/api/leaves/${encodeURIComponent(id)}/archive`, {
       method: 'POST',
     }),
+};
+
+// ---------------------------------------------------------------------------
+// Crew Diary  →  /api/crew-diary
+// ---------------------------------------------------------------------------
+//
+// Per-crew month-wise assignment listing for the Crew Diary tab. The page
+// hydrates this whenever the operator picks a different crew member or a
+// different month — the response is small (one row per run) so a fresh
+// fetch per change is preferable to client-side caching.
+
+export const crewDiary = {
+  /**
+   * @param crewId LP or ALP id (the server probes both rosters).
+   * @param month  IST `YYYY-MM`.
+   */
+  get: (crewId: string, month: string) =>
+    request<CrewDiaryResponse>(
+      `/api/crew-diary?crewId=${encodeURIComponent(crewId)}&month=${encodeURIComponent(month)}`,
+    ),
 };
 
 // ---------------------------------------------------------------------------

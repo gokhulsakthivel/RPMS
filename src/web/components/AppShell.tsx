@@ -23,6 +23,7 @@ const TABS: ReadonlyArray<{ to: string; label: string }> = [
   { to: '/crew',        label: 'Crew' },
   { to: '/assignments', label: 'Assignments' },
   { to: '/leaves',      label: 'Leaves' },
+  { to: '/crew-diary',  label: 'Crew Diary' },
 ];
 
 /**

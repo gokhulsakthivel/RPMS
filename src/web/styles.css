@@ -1307,3 +1307,218 @@ a:hover {
   font-size: var(--text-caption);
   color: var(--color-danger);
 }
+
+/* ---------- Crew Diary tab (design.md §9.6) ------------------------------ */
+.crew-diary-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .crew-diary-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crew-diary-sidebar {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 220px);
+  min-height: 320px;
+  overflow: hidden;
+}
+.crew-diary-sidebar__header {
+  padding: 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+}
+.crew-diary-sidebar__search {
+  width: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: var(--text-body);
+}
+.crew-diary-sidebar__search:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+.crew-diary-sidebar__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+.crew-diary-sidebar__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+.crew-diary-sidebar__item:hover {
+  background: var(--color-surface-alt);
+}
+.crew-diary-sidebar__item--selected {
+  background: var(--color-primary-soft);
+  border-left: 3px solid var(--color-primary);
+  padding-left: 11px;
+}
+.crew-diary-sidebar__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crew-diary-sidebar__kind {
+  flex-shrink: 0;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.crew-diary-sidebar__kind--lp {
+  background: var(--accent-mail-express-bg);
+  color: var(--accent-mail-express-text);
+}
+.crew-diary-sidebar__kind--alp {
+  background: var(--accent-vande-bharat-bg);
+  color: var(--accent-vande-bharat-text);
+}
+.crew-diary-sidebar__empty {
+  margin: 16px;
+  color: var(--color-text-muted);
+  font-size: var(--text-body);
+}
+
+.crew-diary-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.crew-diary-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.crew-diary-month-nav__label {
+  flex: 1;
+  font-size: var(--text-h2);
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: center;
+}
+
+/* ---------- Calendar grid ------------------------------------------------ */
+.crew-diary-calendar {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.crew-diary-calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: var(--color-surface-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+.crew-diary-calendar__weekday {
+  padding: 8px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.crew-diary-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.crew-diary-calendar__cell {
+  min-height: 84px;
+  padding: 6px;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-surface);
+}
+.crew-diary-calendar__cell:nth-child(7n) {
+  border-right: none;
+}
+.crew-diary-calendar__cell--pad {
+  background: var(--color-bg);
+  min-height: 84px;
+}
+.crew-diary-calendar__cell--has {
+  background: var(--color-primary-soft);
+}
+.crew-diary-calendar__day {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.crew-diary-calendar__cell--has .crew-diary-calendar__day {
+  color: var(--color-text);
+}
+.crew-diary-calendar__badge {
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+.crew-diary-calendar__badge-num {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.crew-diary-calendar__badge-route {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Crew Diary table cells -------------------------------------- */
+.crew-diary-table__train-num {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.crew-diary-table__train-name {
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}

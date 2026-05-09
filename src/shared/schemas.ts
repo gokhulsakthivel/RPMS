@@ -615,6 +615,77 @@ export interface SummaryResponse {
   restingCrew: number;
 }
 
+// ---------------------------------------------------------------------------
+// Crew Diary  →  /api/crew-diary?crewId=...&month=YYYY-MM
+// ---------------------------------------------------------------------------
+//
+// The Crew Diary tab (design.md §9.6) renders a per-crew month-wise calendar
+// of every committed assignment held by one LP or ALP. Drafts in the
+// `assignment-drafts` cart are deliberately excluded — the diary is the
+// "what actually happened" view, not the planning view. The wire format
+// inlines train identity (number, name, type) and station endpoints so the
+// calendar/table renders without a join on the client side.
+
+/**
+ * Query params for `GET /api/crew-diary`. `month` is an IST calendar
+ * month (`YYYY-MM`). The server scopes assignments by `runDate.startsWith(
+ * month + '-')` — same IST-day semantics as the rest of the app.
+ */
+export const CrewDiaryQuery = z.object({
+  crewId: nonEmptyString,
+  month: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'expected YYYY-MM'),
+});
+export type CrewDiaryQuery = z.infer<typeof CrewDiaryQuery>;
+
+/**
+ * One entry in the per-crew month diary (design.md §9.6). Carries everything
+ * the table needs to render `Train #16187 · Howrah → New Delhi · 22:30 IST`
+ * without re-fetching the train.
+ */
+export interface CrewDiaryEntry {
+  assignmentId: string;
+  trainId: string;
+  trainNumber: string;
+  trainName: string;
+  trainType: TrainType;
+  /** IST calendar date (`YYYY-MM-DD`) of this run. */
+  runDate: string;
+  /** ISO-8601 UTC departure for the run. */
+  departureTime: string;
+  /** ISO-8601 UTC sign-off (inward arrival) for the run. */
+  signOffTime: string;
+  /** Station the LP/ALP signed on at. */
+  fromStation: string;
+  /** Station the LP/ALP signed off at (post inward leg). */
+  toStation: string;
+  /** Discriminator so the SPA can colour LP rows differently from ALP. */
+  servedAs: 'LP' | 'ALP';
+}
+
+/**
+ * Selectable crew member in the Crew Diary left panel. The same shape
+ * powers both the LP and ALP lists — operators see one combined roster.
+ */
+export interface CrewDiaryPerson {
+  id: string;
+  name: string;
+  kind: 'LP' | 'ALP';
+}
+
+/**
+ * Response from `GET /api/crew-diary`. Empty `entries` is a normal outcome
+ * (the crew member had no runs that month) — the SPA renders an empty-state
+ * for it.
+ */
+export interface CrewDiaryResponse {
+  crew: CrewDiaryPerson;
+  /** Echoed back so the SPA can reconcile late responses with its current pick. */
+  month: string;
+  entries: CrewDiaryEntry[];
+}
+
 /** Unified error response wire format. Mirrors the domain `AssignmentError`. */
 export interface ApiErrorResponse {
   code: string;
