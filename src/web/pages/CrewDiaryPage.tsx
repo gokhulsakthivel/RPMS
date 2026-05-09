@@ -25,9 +25,11 @@ import { describeApiError } from '../lib/errors';
 import { formatIstDate, formatIstTime } from '../lib/time';
 import type {
   CrewDiaryEntry,
+  CrewDiaryLeave,
   CrewDiaryResponse,
   CrewRow,
 } from '../../shared/schemas';
+import { LeaveType } from '../../domain/types';
 import { PageHeader } from '../components/PageHeader';
 import { Banner } from '../components/feedback/Banner';
 import { EmptyState } from '../components/feedback/EmptyState';
@@ -92,6 +94,45 @@ interface CalendarCell {
  * days carry their `YYYY-MM-DD` so the page can look them up directly in
  * `entriesByDate`.
  */
+/**
+ * Yield each `YYYY-MM-DD` between `fromDate` and `toDate` (both inclusive)
+ * that falls inside `month`. The leave window can extend before or after
+ * the queried month — we clamp here so the calendar doesn't try to paint
+ * cells it doesn't own. Iteration is via `Date.UTC(... + 1)` which handles
+ * month/year roll-over correctly.
+ */
+function* expandLeaveDays(
+  fromDate: string,
+  toDate: string,
+  month: string,
+): Generator<string> {
+  const monthStart = `${month}-01`;
+  const lo = fromDate < monthStart ? monthStart : fromDate;
+  // Last day of `month` in `YYYY-MM-DD` form.
+  const [yStr, mStr] = month.split('-');
+  const y = Number.parseInt(yStr ?? '', 10);
+  const m = Number.parseInt(mStr ?? '', 10);
+  if (!y || !m) return;
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const monthEnd = `${month}-${String(lastDay).padStart(2, '0')}`;
+  const hi = toDate > monthEnd ? monthEnd : toDate;
+
+  // Walk day by day. UTC math keeps DST out of the picture entirely — we
+  // never read hour/minute, only `getUTCDate/Month/FullYear`.
+  const [ly, lm, ld] = lo.split('-').map((s) => Number.parseInt(s, 10));
+  if (!ly || !lm || !ld) return;
+  const cursor = new Date(Date.UTC(ly, lm - 1, ld));
+  while (true) {
+    const cy = cursor.getUTCFullYear();
+    const cm = cursor.getUTCMonth() + 1;
+    const cd = cursor.getUTCDate();
+    const iso = `${cy}-${String(cm).padStart(2, '0')}-${String(cd).padStart(2, '0')}`;
+    if (iso > hi) break;
+    yield iso;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+}
+
 function buildCalendar(month: string): Array<CalendarCell | null> {
   const [y, m] = month.split('-').map((s) => parseInt(s, 10));
   if (!y || !m) return Array(42).fill(null);
@@ -219,6 +260,23 @@ export function CrewDiaryPage() {
     return map;
   }, [diary]);
 
+  // ----- derived: explode each leave window into its constituent days ------
+  // The wire payload carries `[fromDate, toDate]` ranges; the calendar reads
+  // by individual day. We pre-expand once per response so the per-cell
+  // rendering stays O(1) — important for 6×7 = 42 cells on every paint.
+  const leavesByDate = useMemo<Map<string, CrewDiaryLeave[]>>(() => {
+    const map = new Map<string, CrewDiaryLeave[]>();
+    if (!diary) return map;
+    for (const l of diary.leaves) {
+      for (const isoDate of expandLeaveDays(l.fromDate, l.toDate, month)) {
+        const list = map.get(isoDate) ?? [];
+        list.push(l);
+        map.set(isoDate, list);
+      }
+    }
+    return map;
+  }, [diary, month]);
+
   const calendarCells = useMemo(() => buildCalendar(month), [month]);
 
   return (
@@ -335,8 +393,11 @@ export function CrewDiaryPage() {
               <CalendarGrid
                 cells={calendarCells}
                 entriesByDate={entriesByDate}
+                leavesByDate={leavesByDate}
               />
+              <CalendarLegend />
               <EntryList diary={diary} />
+              <LeaveList diary={diary} />
             </>
           )}
         </section>
@@ -347,18 +408,27 @@ export function CrewDiaryPage() {
 
 // ---------------------------------------------------------------------------
 // CalendarGrid — 6×7 month view. Renders every day so weekday alignment
-// stays correct, but only days with committed assignments carry a badge.
+// stays correct. Cells carry up to two kinds of badges:
+//   • Assignment badges  — committed runs (from `entriesByDate`).
+//   • Leave/Training/Sick badges — non-availability windows that include
+//     this day (from `leavesByDate`). Each `LeaveType` has its own colour
+//     swatch so the operator can tell at a glance *why* the crew member
+//     was unavailable.
+//
 // Drafts never appear here: the wire payload from `/api/crew-diary` is
 // sourced from the assignments repo, not the drafts cart, so a staged-but-
-// not-committed pick is invisible to this view by construction.
+// not-committed pick is invisible to this view by construction. Leaves
+// likewise come from `LeaveRepo` and exclude archived rows.
 // ---------------------------------------------------------------------------
 
 function CalendarGrid({
   cells,
   entriesByDate,
+  leavesByDate,
 }: {
   cells: Array<CalendarCell | null>;
   entriesByDate: ReadonlyMap<string, CrewDiaryEntry[]>;
+  leavesByDate: ReadonlyMap<string, CrewDiaryLeave[]>;
 }) {
   const weekdayLabels: ReadonlyArray<string> = [
     'Sun',
@@ -394,18 +464,38 @@ function CalendarGrid({
             );
           }
           const entries = entriesByDate.get(cell.isoDate) ?? [];
+          const leaves = leavesByDate.get(cell.isoDate) ?? [];
           const hasEntries = entries.length > 0;
+          const hasLeaves = leaves.length > 0;
+          // Tint the cell after the dominant signal: a run is the headline
+          // event; if there's no run but the day is leave/training, tint
+          // with the leave colour so the unavailability pops visually.
+          const cellMod = hasEntries
+            ? ' crew-diary-calendar__cell--has'
+            : hasLeaves
+              ? ` crew-diary-calendar__cell--leave crew-diary-calendar__cell--leave-${leaves[0]!.type.toLowerCase()}`
+              : '';
+          // Concatenate signals into the aria-label so screen-readers get a
+          // self-describing date summary.
+          const summaryParts: string[] = [];
+          if (hasEntries) summaryParts.push(`${entries.length} assignment(s)`);
+          if (hasLeaves) {
+            summaryParts.push(
+              leaves
+                .map((l) => leaveTypeLabel(l.type).toLowerCase())
+                .join(', '),
+            );
+          }
           return (
             <div
               key={cell.isoDate}
-              className={
-                'crew-diary-calendar__cell' +
-                (hasEntries
-                  ? ' crew-diary-calendar__cell--has'
-                  : '')
-              }
+              className={'crew-diary-calendar__cell' + cellMod}
               role="gridcell"
-              aria-label={`${cell.isoDate}${hasEntries ? `, ${entries.length} assignment(s)` : ''}`}
+              aria-label={
+                summaryParts.length
+                  ? `${cell.isoDate}, ${summaryParts.join('; ')}`
+                  : cell.isoDate
+              }
             >
               <div className="crew-diary-calendar__day">{cell.dayOfMonth}</div>
               {entries.map((a) => (
@@ -422,6 +512,21 @@ function CalendarGrid({
                   </span>
                 </div>
               ))}
+              {leaves.map((l) => (
+                <div
+                  key={l.leaveId}
+                  className={
+                    'crew-diary-calendar__leave-badge' +
+                    ` crew-diary-calendar__leave-badge--${l.type.toLowerCase()}`
+                  }
+                  title={
+                    `${leaveTypeLabel(l.type)} · ${l.fromDate} → ${l.toDate}` +
+                    (l.reason ? `\n${l.reason}` : '')
+                  }
+                >
+                  {leaveTypeLabel(l.type)}
+                </div>
+              ))}
             </div>
           );
         })}
@@ -430,12 +535,55 @@ function CalendarGrid({
   );
 }
 
+/**
+ * Tiny static legend below the calendar — one swatch per `LeaveType` plus
+ * the "assigned" tint. Keeps the meaning of each colour discoverable
+ * without forcing the operator to hover for tooltips.
+ */
+function CalendarLegend() {
+  return (
+    <div className="crew-diary-legend" aria-label="Calendar legend">
+      <span className="crew-diary-legend__item">
+        <span className="crew-diary-legend__swatch crew-diary-legend__swatch--assigned" />
+        Assigned
+      </span>
+      <span className="crew-diary-legend__item">
+        <span className="crew-diary-legend__swatch crew-diary-legend__swatch--leave" />
+        {leaveTypeLabel(LeaveType.LEAVE)}
+      </span>
+      <span className="crew-diary-legend__item">
+        <span className="crew-diary-legend__swatch crew-diary-legend__swatch--sick" />
+        {leaveTypeLabel(LeaveType.SICK)}
+      </span>
+      <span className="crew-diary-legend__item">
+        <span className="crew-diary-legend__swatch crew-diary-legend__swatch--training" />
+        {leaveTypeLabel(LeaveType.TRAINING)}
+      </span>
+    </div>
+  );
+}
+
+/** Human-readable label for the colour-coded badges. */
+function leaveTypeLabel(t: LeaveType): string {
+  switch (t) {
+    case LeaveType.SICK:
+      return 'Sick';
+    case LeaveType.LEAVE:
+      return 'Leave';
+    case LeaveType.TRAINING:
+      return 'Training';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // EntryList — full table beneath the calendar
 // ---------------------------------------------------------------------------
 
 function EntryList({ diary }: { diary: CrewDiaryResponse }) {
   if (diary.entries.length === 0) {
+    // Don't render the standalone empty-state when leaves exist for the
+    // month — the calendar + LeaveList already explain the absence of runs.
+    if (diary.leaves.length > 0) return null;
     return (
       <EmptyState
         icon="🪧"
@@ -495,6 +643,60 @@ function EntryList({ diary }: { diary: CrewDiaryResponse }) {
                 >
                   {a.servedAs}
                 </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// LeaveList — companion table that lists every leave/training window
+// overlapping the queried month. Sits beneath the entries table so the
+// operator gets the full picture (runs + non-availability) on one page.
+// ---------------------------------------------------------------------------
+
+function LeaveList({ diary }: { diary: CrewDiaryResponse }) {
+  if (diary.leaves.length === 0) return null;
+  return (
+    <div className="data-table crew-diary-table">
+      <table>
+        <caption className="data-table__caption">
+          {diary.leaves.length} leave window
+          {diary.leaves.length === 1 ? '' : 's'} —{' '}
+          {diary.crew.name} ({diary.crew.kind})
+        </caption>
+        <thead>
+          <tr>
+            <th className="data-table__th data-table__th--left">Type</th>
+            <th className="data-table__th data-table__th--left">From</th>
+            <th className="data-table__th data-table__th--left">To</th>
+            <th className="data-table__th data-table__th--left">Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {diary.leaves.map((l) => (
+            <tr key={l.leaveId}>
+              <td className="data-table__td data-table__td--left">
+                <span
+                  className={
+                    'crew-diary-leave-pill' +
+                    ` crew-diary-leave-pill--${l.type.toLowerCase()}`
+                  }
+                >
+                  {leaveTypeLabel(l.type)}
+                </span>
+              </td>
+              <td className="data-table__td data-table__td--left">
+                {formatIstDate(new Date(`${l.fromDate}T00:00:00+05:30`))}
+              </td>
+              <td className="data-table__td data-table__td--left">
+                {formatIstDate(new Date(`${l.toDate}T00:00:00+05:30`))}
+              </td>
+              <td className="data-table__td data-table__td--left">
+                {l.reason ?? '—'}
               </td>
             </tr>
           ))}

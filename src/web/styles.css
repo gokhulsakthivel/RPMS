@@ -1522,3 +1522,115 @@ a:hover {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
 }
+
+/* ---------- Crew Diary leave/training badges --------------------------- */
+/*
+ * Leave/Training/Sick are shown as small full-width pills inside calendar
+ * cells. The cell tint kicks in only when there's no run on that day —
+ * runs are the headline event, leaves only "fill the gap" when nothing
+ * was scheduled. Each `LeaveType` has its own swatch palette pulled from
+ * the shared `--accent-*` ramp so the colour vocabulary matches the
+ * Leaves tab table elsewhere in the app.
+ */
+.crew-diary-calendar__cell--leave {
+  /* Soft tint by default; specific type-tints override below. */
+  background: var(--color-bg);
+}
+.crew-diary-calendar__cell--leave-sick {
+  background: var(--accent-sick-bg);
+}
+.crew-diary-calendar__cell--leave-leave {
+  background: var(--accent-leave-bg);
+}
+.crew-diary-calendar__cell--leave-training {
+  background: var(--accent-training-bg);
+}
+
+.crew-diary-calendar__leave-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crew-diary-calendar__leave-badge--sick {
+  background: var(--accent-sick-bg);
+  color: var(--accent-sick-text);
+  border-color: var(--accent-sick-text);
+}
+.crew-diary-calendar__leave-badge--leave {
+  background: var(--accent-leave-bg);
+  color: var(--accent-leave-text);
+  border-color: var(--accent-leave-text);
+}
+.crew-diary-calendar__leave-badge--training {
+  background: var(--accent-training-bg);
+  color: var(--accent-training-text);
+  border-color: var(--accent-training-text);
+}
+
+/* ---------- Crew Diary calendar legend --------------------------------- */
+.crew-diary-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 8px 14px;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+}
+.crew-diary-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.crew-diary-legend__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+}
+.crew-diary-legend__swatch--assigned {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+}
+.crew-diary-legend__swatch--leave {
+  background: var(--accent-leave-bg);
+  border-color: var(--accent-leave-text);
+}
+.crew-diary-legend__swatch--sick {
+  background: var(--accent-sick-bg);
+  border-color: var(--accent-sick-text);
+}
+.crew-diary-legend__swatch--training {
+  background: var(--accent-training-bg);
+  border-color: var(--accent-training-text);
+}
+
+/* ---------- Crew Diary leave-type pill (table) ------------------------- */
+.crew-diary-leave-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.crew-diary-leave-pill--sick {
+  background: var(--accent-sick-bg);
+  color: var(--accent-sick-text);
+}
+.crew-diary-leave-pill--leave {
+  background: var(--accent-leave-bg);
+  color: var(--accent-leave-text);
+}
+.crew-diary-leave-pill--training {
+  background: var(--accent-training-bg);
+  color: var(--accent-training-text);
+}

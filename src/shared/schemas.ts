@@ -675,15 +675,38 @@ export interface CrewDiaryPerson {
 }
 
 /**
+ * One leave window the crew member held that overlapped the queried month.
+ * Includes SICK, LEAVE, and TRAINING (the `LeaveType` enum) — each renders
+ * with its own colour on the calendar so the operator sees at a glance
+ * *why* the crew member was unavailable on a given day.
+ *
+ * The window itself can extend before/after the queried month — the SPA
+ * clamps the date range to the visible month when painting cells.
+ */
+export interface CrewDiaryLeave {
+  leaveId: string;
+  type: LeaveType;
+  /** Inclusive start, IST `YYYY-MM-DD`. May be earlier than the queried month. */
+  fromDate: string;
+  /** Inclusive end, IST `YYYY-MM-DD`. May be later than the queried month. */
+  toDate: string;
+  /** Free-text note for operators. Optional. */
+  reason?: string;
+}
+
+/**
  * Response from `GET /api/crew-diary`. Empty `entries` is a normal outcome
  * (the crew member had no runs that month) — the SPA renders an empty-state
- * for it.
+ * for it. `leaves` carries every active leave window whose `[fromDate, toDate]`
+ * overlaps the queried month (any `LeaveType` — SICK, LEAVE, TRAINING).
  */
 export interface CrewDiaryResponse {
   crew: CrewDiaryPerson;
   /** Echoed back so the SPA can reconcile late responses with its current pick. */
   month: string;
   entries: CrewDiaryEntry[];
+  /** Active leave windows overlapping `month`. Drafts/archives excluded. */
+  leaves: CrewDiaryLeave[];
 }
 
 /** Unified error response wire format. Mirrors the domain `AssignmentError`. */

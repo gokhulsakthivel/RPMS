@@ -3,7 +3,10 @@
 // Powers the Crew Diary tab (design.md §9.6). The operator picks one crew
 // member and a month; the server returns every active assignment that
 // crew member held in that month, with train identity inlined so the
-// table renders without a join.
+// table renders without a join. The response also carries overlapping
+// **leave windows** (SICK / LEAVE / TRAINING — the `LeaveType` enum) so
+// the calendar can show *why* the crew member was unavailable on a day,
+// not just the days they ran.
 //
 // Routes:
 //   GET /api/crew-diary?crewId=...&month=YYYY-MM
@@ -14,7 +17,8 @@
 // `assignments.listByCrew` and resolves each to its train via
 // `trains.findById({ includeArchived: true })` so a run on a now-archived
 // train still renders. Archived assignments are excluded by default
-// because a cancelled run was never actually worked.
+// because a cancelled run was never actually worked. Leaves use the same
+// active-only filter for the same reason.
 //
 // Drafts are excluded by construction: this endpoint reads from the
 // committed-assignments repo (`AssignmentRepo`), never from the separate
@@ -25,12 +29,14 @@ import { Router } from 'express';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
+  LeaveRepo,
   LocoPilotRepo,
   TrainRepo,
 } from '../domain/repositories';
-import { Assignment, Train, TrainType } from '../domain/types';
+import { Assignment, Leave, Train, TrainType } from '../domain/types';
 import {
   CrewDiaryEntry,
+  CrewDiaryLeave,
   CrewDiaryPerson,
   CrewDiaryQuery,
   CrewDiaryResponse,
@@ -42,6 +48,7 @@ export interface CrewDiaryRouterDeps {
   lps: LocoPilotRepo;
   alps: AssistantLocoPilotRepo;
   assignments: AssignmentRepo;
+  leaves: LeaveRepo;
 }
 
 export function createCrewDiaryRouter(deps: CrewDiaryRouterDeps): Router {
@@ -92,10 +99,24 @@ export function createCrewDiaryRouter(deps: CrewDiaryRouterDeps): Router {
         toDiaryEntry(a, crew, trainsById),
       );
 
+      // Leaves overlapping the queried month. `listByCrew` already excludes
+      // archived rows. We then keep only those whose `[fromDate, toDate]`
+      // window intersects `[firstOfMonth, lastOfMonth]`. String comparison is
+      // safe here because all dates are zero-padded `YYYY-MM-DD`.
+      const allLeaves = await deps.leaves.listByCrew(crew.id);
+      const monthStart = `${month}-01`;
+      const monthEnd = lastDayOfMonthIst(month);
+      const monthLeaves = allLeaves
+        .filter((l) => l.fromDate <= monthEnd && l.toDate >= monthStart)
+        .sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+
+      const leaves: CrewDiaryLeave[] = monthLeaves.map(toDiaryLeave);
+
       const response: CrewDiaryResponse = {
         crew,
         month,
         entries,
+        leaves,
       };
       res.json(response);
     }),
@@ -151,4 +172,38 @@ function toDiaryEntry(
     toStation: train?.onwardToStation ?? '—',
     servedAs,
   };
+}
+
+/**
+ * Project one Leave into the wire row. We surface only the fields the
+ * calendar / table needs — the row's `crewId`/`crewRole`/`createdAt`/
+ * `archivedAt` are redundant given the response is already crew-scoped
+ * and excludes archived rows.
+ */
+function toDiaryLeave(l: Leave): CrewDiaryLeave {
+  const out: CrewDiaryLeave = {
+    leaveId: l.id,
+    type: l.type,
+    fromDate: l.fromDate,
+    toDate: l.toDate,
+  };
+  if (l.reason !== undefined) out.reason = l.reason;
+  return out;
+}
+
+/**
+ * `YYYY-MM` → `YYYY-MM-DD` for the last calendar day of that IST month.
+ * Used to clamp the leave-overlap filter without instantiating any
+ * timezone-aware library — all of our date math here is on string
+ * comparisons of `YYYY-MM-DD` so calendar-day-of-month is enough.
+ */
+function lastDayOfMonthIst(month: string): string {
+  const [yStr, mStr] = month.split('-');
+  const y = Number.parseInt(yStr ?? '', 10);
+  const m = Number.parseInt(mStr ?? '', 10);
+  if (!y || !m) return `${month}-31`;
+  // Day 0 of the *next* month = last day of this month. UTC math is fine
+  // because we only read `getUTCDate()`.
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${month}-${String(last).padStart(2, '0')}`;
 }
