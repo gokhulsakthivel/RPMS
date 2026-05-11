@@ -559,6 +559,10 @@ function CalendarLegend() {
         <span className="crew-diary-legend__swatch crew-diary-legend__swatch--training" />
         {leaveTypeLabel(LeaveType.TRAINING)}
       </span>
+      <span className="crew-diary-legend__item">
+        <span className="crew-diary-legend__swatch crew-diary-legend__swatch--pr" />
+        {leaveTypeLabel(LeaveType.PR)} (Periodic Rest)
+      </span>
     </div>
   );
 }
@@ -572,6 +576,11 @@ function leaveTypeLabel(t: LeaveType): string {
       return 'Leave';
     case LeaveType.TRAINING:
       return 'Training';
+    case LeaveType.PR:
+      // Short railway shorthand keeps the calendar badge readable inside
+      // the 84px-tall cell. The tooltip carries the full "Periodic Rest"
+      // explanation for new users.
+      return 'PR';
   }
 }
 

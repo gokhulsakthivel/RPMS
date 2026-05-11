@@ -239,6 +239,7 @@ export function LeaveForm({
             <option value={LeaveType.SICK}>Sick</option>
             <option value={LeaveType.LEAVE}>Leave (planned)</option>
             <option value={LeaveType.TRAINING}>Training</option>
+            <option value={LeaveType.PR}>PR (Periodic Rest)</option>
           </Select>
         )}
       </FormField>

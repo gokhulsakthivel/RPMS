@@ -106,6 +106,7 @@ function formatLeaveType(value: unknown): string {
     case 'SICK':     return 'sick leave';
     case 'LEAVE':    return 'leave';
     case 'TRAINING': return 'training';
+    case 'PR':       return 'Periodic Rest';
     default:         return value.toLowerCase();
   }
 }

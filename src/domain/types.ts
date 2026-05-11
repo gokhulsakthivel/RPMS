@@ -45,15 +45,22 @@ export type TimeOfDayString = string;
 /**
  * Reason a crew member is unavailable on a calendar window.
  *
- * Sick leave, planned leave, and training all map to the same eligibility
- * outcome — the crew member cannot be assigned to a run whose `runDate`
- * falls within `[fromDate, toDate]`. The label is preserved for reporting
- * and for the rejection reason surfaced in the UI.
+ * Sick leave, planned leave, training, and Periodic Rest (PR) all map to
+ * the same eligibility outcome — the crew member cannot be assigned to a
+ * run whose `runDate` falls within `[fromDate, toDate]`. The label is
+ * preserved for reporting and for the rejection reason surfaced in the UI.
+ *
+ * PR (Periodic Rest) is the Indian Railways term for the mandatory weekly
+ * rest period a running-staff crew member is entitled to under the
+ * Hours of Employment Regulations. It is recorded the same way as any
+ * other leave window — a contiguous `[fromDate, toDate]` slice during
+ * which the crew member is unavailable.
  */
 export enum LeaveType {
   SICK     = 'SICK',
   LEAVE    = 'LEAVE',
   TRAINING = 'TRAINING',
+  PR       = 'PR',
 }
 
 /**

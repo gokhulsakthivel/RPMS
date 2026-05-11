@@ -63,6 +63,11 @@
   /* Training — amber, mirrors the "in development" tone. */
   --accent-training-bg:     #fef3c7;
   --accent-training-text:   #854d0e;
+  /* PR (Periodic Rest) — teal/cyan; distinct from the warmer SICK red
+     and the cooler LEAVE indigo so all four leave types are scannable
+     side-by-side on the calendar legend. */
+  --accent-pr-bg:           #cffafe;
+  --accent-pr-text:         #155e75;
 
   /* ---------- Typography scale (design.md §2.1 references) ----------- */
   --text-h1:      28px;
@@ -1545,6 +1550,9 @@ a:hover {
 .crew-diary-calendar__cell--leave-training {
   background: var(--accent-training-bg);
 }
+.crew-diary-calendar__cell--leave-pr {
+  background: var(--accent-pr-bg);
+}
 
 .crew-diary-calendar__leave-badge {
   display: inline-block;
@@ -1573,6 +1581,11 @@ a:hover {
   background: var(--accent-training-bg);
   color: var(--accent-training-text);
   border-color: var(--accent-training-text);
+}
+.crew-diary-calendar__leave-badge--pr {
+  background: var(--accent-pr-bg);
+  color: var(--accent-pr-text);
+  border-color: var(--accent-pr-text);
 }
 
 /* ---------- Crew Diary calendar legend --------------------------------- */
@@ -1611,6 +1624,10 @@ a:hover {
   background: var(--accent-training-bg);
   border-color: var(--accent-training-text);
 }
+.crew-diary-legend__swatch--pr {
+  background: var(--accent-pr-bg);
+  border-color: var(--accent-pr-text);
+}
 
 /* ---------- Crew Diary leave-type pill (table) ------------------------- */
 .crew-diary-leave-pill {
@@ -1633,4 +1650,8 @@ a:hover {
 .crew-diary-leave-pill--training {
   background: var(--accent-training-bg);
   color: var(--accent-training-text);
+}
+.crew-diary-leave-pill--pr {
+  background: var(--accent-pr-bg);
+  color: var(--accent-pr-text);
 }

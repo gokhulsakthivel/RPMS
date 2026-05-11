@@ -41,6 +41,7 @@ const LEAVE_TYPES: ReadonlyArray<LeaveType> = [
   LeaveType.SICK,
   LeaveType.LEAVE,
   LeaveType.TRAINING,
+  LeaveType.PR,
 ];
 
 export class CsvLeaveRepo implements LeaveRepo {
@@ -180,7 +181,7 @@ function decodeLeave(row: CsvRow): Leave {
   const type = row['type'] ?? '';
   if (!LEAVE_TYPES.includes(type as LeaveType)) {
     throw new Error(
-      `CsvLeaveRepo: type must be one of SICK|LEAVE|TRAINING (got ${JSON.stringify(type)}, id=${id})`,
+      `CsvLeaveRepo: type must be one of SICK|LEAVE|TRAINING|PR (got ${JSON.stringify(type)}, id=${id})`,
     );
   }
   const fromDate = row['fromDate'] ?? '';
@@ -243,7 +244,7 @@ function assertValidLeaveInput(
     throw new Error(`CsvLeaveRepo: crewRole must be LP or ALP (got ${JSON.stringify(input.crewRole)})`);
   }
   if (!LEAVE_TYPES.includes(input.type)) {
-    throw new Error(`CsvLeaveRepo: type must be SICK|LEAVE|TRAINING (got ${JSON.stringify(input.type)})`);
+    throw new Error(`CsvLeaveRepo: type must be SICK|LEAVE|TRAINING|PR (got ${JSON.stringify(input.type)})`);
   }
   if (!DATE_RE.test(input.fromDate)) {
     throw new Error(`CsvLeaveRepo: fromDate must be YYYY-MM-DD (got ${JSON.stringify(input.fromDate)})`);
