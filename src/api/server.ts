@@ -19,6 +19,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
+import { CachedTableStore } from '../persistence/cachedTableStore';
 import { CsvAssignmentDraftRepo } from '../persistence/csvAssignmentDraftRepo';
 import { CsvAssignmentRepo } from '../persistence/csvAssignmentRepo';
 import { CsvAssistantLocoPilotRepo } from '../persistence/csvAssistantLocoPilotRepo';
@@ -67,13 +68,16 @@ function createStore(): TableStore {
       );
     }
     // eslint-disable-next-line no-console
-    console.log('[api] storage backend: Google Sheets');
-    return new SheetsTableStore({
+    console.log('[api] storage backend: Google Sheets (cached, 60 s TTL)');
+    const raw = new SheetsTableStore({
       spreadsheetId,
       serviceAccountEmail,
       // The private key arrives with literal \\n — restore real newlines.
       privateKey: privateKey.replace(/\\n/g, '\n'),
     });
+    // Wrap with an in-memory cache to stay well within Sheets API quotas.
+    // Reads are cached for 60 s; writes invalidate the relevant table.
+    return new CachedTableStore(raw);
   }
   // eslint-disable-next-line no-console
   console.log(`[api] storage backend: CSV (${DATA_DIR})`);

@@ -8,6 +8,10 @@
 //      structured `{ code, ...context }` payload preserved — pages catch
 //      `ApiError` and decide whether to show an inline banner or a toast.
 //   3. Date inputs (`Date` objects) are serialised to ISO-8601 once, here.
+//   4. GET requests are cached (30 s TTL) with in-flight deduplication to
+//      reduce redundant network round-trips — especially helpful with the
+//      Google Sheets backend. Mutations bypass the cache and invalidate
+//      related entries so subsequent GETs fetch fresh data.
 //
 // In development all endpoints route through Vite's dev proxy (`/api → :3001`)
 // so the browser only ever talks to :3000.
@@ -18,6 +22,7 @@
 // the Vite proxy handles them.
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
+import * as cache from './fetchCache';
 import type {
   AlpCreateInput,
   AlpUpdateInput,
@@ -70,7 +75,11 @@ interface RequestInitJson extends Omit<RequestInit, 'body'> {
   jsonBody?: unknown;
 }
 
-async function request<T>(path: string, init: RequestInitJson = {}): Promise<T> {
+/**
+ * Core fetch — always hits the network. Used by mutations and as the inner
+ * implementation for the cached GET path.
+ */
+async function rawRequest<T>(path: string, init: RequestInitJson = {}): Promise<T> {
   const { jsonBody, headers, ...rest } = init;
   const finalHeaders: HeadersInit = {
     accept: 'application/json',
@@ -114,6 +123,36 @@ async function request<T>(path: string, init: RequestInitJson = {}): Promise<T> 
   return parsed as T;
 }
 
+/**
+ * Smart request — GET requests are served from a 30 s TTL cache with
+ * in-flight deduplication; mutations always go to the network.
+ */
+async function request<T>(path: string, init: RequestInitJson = {}): Promise<T> {
+  const method = (init.method ?? 'GET').toUpperCase();
+
+  // Only cache GET requests.
+  if (method !== 'GET') return rawRequest<T>(path, init);
+
+  const url = `${API_BASE}${path}`;
+
+  // 1. Return from cache if still fresh.
+  const cached = cache.get<T>(url);
+  if (cached !== undefined) return cached;
+
+  // 2. Piggy-back on an identical in-flight request.
+  const pending = cache.getInflight<T>(url);
+  if (pending) return pending;
+
+  // 3. Fetch, cache, and return.
+  const promise = rawRequest<T>(path, init).then((data) => {
+    cache.set(url, data);
+    return data;
+  });
+
+  cache.setInflight(url, promise);
+  return promise;
+}
+
 // ---------------------------------------------------------------------------
 // Train  →  /api/trains
 // ---------------------------------------------------------------------------
@@ -126,6 +165,12 @@ async function request<T>(path: string, init: RequestInitJson = {}): Promise<T> 
 export type TrainCreateWire = TrainCreateInput;
 export type TrainUpdateWire = TrainUpdateInput;
 
+/** Invalidate trains + summary cache after a train mutation. */
+function invalidateTrains() {
+  cache.invalidate(`${API_BASE}/api/trains`);
+  cache.invalidate(`${API_BASE}/api/summary`);
+}
+
 export const trains = {
   list: (date: string) =>
     request<TrainWithAssignment[]>(`/api/trains?date=${encodeURIComponent(date)}`),
@@ -134,18 +179,18 @@ export const trains = {
     request<TrainRow>('/api/trains', {
       method: 'POST',
       jsonBody: input,
-    }),
+    }).then((r) => { invalidateTrains(); return r; }),
 
   update: (id: string, patch: TrainUpdateWire) =>
     request<TrainRow>(`/api/trains/${encodeURIComponent(id)}`, {
       method: 'PUT',
       jsonBody: patch,
-    }),
+    }).then((r) => { invalidateTrains(); return r; }),
 
   archive: (id: string) =>
     request<void>(`/api/trains/${encodeURIComponent(id)}/archive`, {
       method: 'POST',
-    }),
+    }).then((r) => { invalidateTrains(); return r; }),
 };
 
 // ---------------------------------------------------------------------------
@@ -167,6 +212,14 @@ function encodeLpUpdate(patch: LpUpdateWire): unknown {
   return out;
 }
 
+/** Invalidate crew-related caches after an LP or ALP mutation. */
+function invalidateCrew() {
+  cache.invalidate(`${API_BASE}/api/loco-pilots`);
+  cache.invalidate(`${API_BASE}/api/assistant-loco-pilots`);
+  cache.invalidate(`${API_BASE}/api/eligible-crew`);
+  cache.invalidate(`${API_BASE}/api/summary`);
+}
+
 export const locoPilots = {
   list: (date: string) =>
     request<CrewRow[]>(`/api/loco-pilots?date=${encodeURIComponent(date)}`),
@@ -175,18 +228,18 @@ export const locoPilots = {
     request<unknown>('/api/loco-pilots', {
       method: 'POST',
       jsonBody: input,
-    }),
+    }).then((r) => { invalidateCrew(); return r; }),
 
   update: (id: string, patch: LpUpdateWire) =>
     request<unknown>(`/api/loco-pilots/${encodeURIComponent(id)}`, {
       method: 'PUT',
       jsonBody: encodeLpUpdate(patch),
-    }),
+    }).then((r) => { invalidateCrew(); return r; }),
 
   archive: (id: string) =>
     request<void>(`/api/loco-pilots/${encodeURIComponent(id)}/archive`, {
       method: 'POST',
-    }),
+    }).then((r) => { invalidateCrew(); return r; }),
 };
 
 // ---------------------------------------------------------------------------
@@ -217,24 +270,33 @@ export const assistantLocoPilots = {
     request<unknown>('/api/assistant-loco-pilots', {
       method: 'POST',
       jsonBody: input,
-    }),
+    }).then((r) => { invalidateCrew(); return r; }),
 
   update: (id: string, patch: AlpUpdateWire) =>
     request<unknown>(`/api/assistant-loco-pilots/${encodeURIComponent(id)}`, {
       method: 'PUT',
       jsonBody: encodeAlpUpdate(patch),
-    }),
+    }).then((r) => { invalidateCrew(); return r; }),
 
   archive: (id: string) =>
     request<void>(
       `/api/assistant-loco-pilots/${encodeURIComponent(id)}/archive`,
       { method: 'POST' },
-    ),
+    ).then((r) => { invalidateCrew(); return r; }),
 };
 
 // ---------------------------------------------------------------------------
 // Assignments  →  /api/assignments
 // ---------------------------------------------------------------------------
+
+/** Invalidate assignment-related caches after an assignment mutation. */
+function invalidateAssignments() {
+  cache.invalidate(`${API_BASE}/api/assignments`);
+  cache.invalidate(`${API_BASE}/api/trains`);
+  cache.invalidate(`${API_BASE}/api/eligible-crew`);
+  cache.invalidate(`${API_BASE}/api/crew-diary`);
+  cache.invalidate(`${API_BASE}/api/summary`);
+}
 
 export const assignments = {
   list: (date: string) =>
@@ -250,7 +312,7 @@ export const assignments = {
     request<unknown>('/api/assignments', {
       method: 'POST',
       jsonBody: input,
-    }),
+    }).then((r) => { invalidateAssignments(); return r; }),
 
   /**
    * Edit an active assignment — swap LP and/or ALP. Same rule errors as
@@ -261,12 +323,12 @@ export const assignments = {
     request<unknown>(`/api/assignments/${encodeURIComponent(id)}`, {
       method: 'PUT',
       jsonBody: patch,
-    }),
+    }).then((r) => { invalidateAssignments(); return r; }),
 
   archive: (id: string) =>
     request<void>(`/api/assignments/${encodeURIComponent(id)}/archive`, {
       method: 'POST',
-    }),
+    }).then((r) => { invalidateAssignments(); return r; }),
 
   eligibleCrew: (trainId: string, runDate: string) =>
     request<EligibleCrewResponse>(
@@ -284,6 +346,11 @@ export const assignments = {
 // regular assignment orchestrators on the server. The cart survives page
 // reloads and is shared across tabs/operators because it's the CSV.
 
+/** Invalidate draft cache. */
+function invalidateDrafts() {
+  cache.invalidate(`${API_BASE}/api/assignment-drafts`);
+}
+
 export const assignmentDrafts = {
   list: (date: string) =>
     request<AssignmentDraftRow[]>(
@@ -294,30 +361,37 @@ export const assignmentDrafts = {
     request<AssignmentDraftRow>('/api/assignment-drafts', {
       method: 'POST',
       jsonBody: input,
-    }),
+    }).then((r) => { invalidateDrafts(); return r; }),
 
   remove: (trainId: string, date: string) =>
     request<void>(
       `/api/assignment-drafts/${encodeURIComponent(trainId)}?date=${encodeURIComponent(date)}`,
       { method: 'DELETE' },
-    ),
+    ).then((r) => { invalidateDrafts(); return r; }),
 
   reset: (date: string) =>
     request<void>(
       `/api/assignment-drafts?date=${encodeURIComponent(date)}`,
       { method: 'DELETE' },
-    ),
+    ).then((r) => { invalidateDrafts(); return r; }),
 
   commit: (date: string) =>
     request<AssignmentDraftCommitResponse>(
       `/api/assignment-drafts/commit?date=${encodeURIComponent(date)}`,
       { method: 'POST' },
-    ),
+    ).then((r) => { invalidateDrafts(); invalidateAssignments(); return r; }),
 };
 
 // ---------------------------------------------------------------------------
 // Leaves  →  /api/leaves
 // ---------------------------------------------------------------------------
+
+/** Invalidate leave-related caches. */
+function invalidateLeaves() {
+  cache.invalidate(`${API_BASE}/api/leaves`);
+  cache.invalidate(`${API_BASE}/api/eligible-crew`);
+  cache.invalidate(`${API_BASE}/api/summary`);
+}
 
 export const leaves = {
   list: () => request<LeaveRow[]>('/api/leaves'),
@@ -326,18 +400,18 @@ export const leaves = {
     request<LeaveRow>('/api/leaves', {
       method: 'POST',
       jsonBody: input,
-    }),
+    }).then((r) => { invalidateLeaves(); return r; }),
 
   update: (id: string, patch: LeaveUpdateInput) =>
     request<LeaveRow>(`/api/leaves/${encodeURIComponent(id)}`, {
       method: 'PUT',
       jsonBody: patch,
-    }),
+    }).then((r) => { invalidateLeaves(); return r; }),
 
   archive: (id: string) =>
     request<void>(`/api/leaves/${encodeURIComponent(id)}/archive`, {
       method: 'POST',
-    }),
+    }).then((r) => { invalidateLeaves(); return r; }),
 };
 
 // ---------------------------------------------------------------------------
