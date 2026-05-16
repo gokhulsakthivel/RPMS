@@ -2,6 +2,9 @@
 //
 // Three primary tabs (design.md §2.1) plus a default redirect to `/trains`.
 // The shell component is the layout route; pages render in its `<Outlet />`.
+//
+// `basename` is set by Vite's `import.meta.env.BASE_URL` so that routes work
+// correctly both in local dev (`/`) and on GitHub Pages (`/RPMS/`).
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
@@ -12,10 +15,13 @@ import { CrewDiaryPage } from './pages/CrewDiaryPage';
 import { LeavesPage } from './pages/LeavesPage';
 import { TrainsPage } from './pages/TrainsPage';
 
+// Strip trailing slash so BrowserRouter doesn't double-up.
+const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
+
 export function App() {
   return (
     <SelectedDateProvider>
-      <BrowserRouter>
+      <BrowserRouter basename={basename}>
         <Routes>
           {/* Layout route — renders the shell once, pages slot into <Outlet />. */}
           <Route element={<AppShell />}>

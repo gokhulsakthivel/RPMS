@@ -1,0 +1,62 @@
+# Build the RPMS Vite SPA and deploy it to GitHub Pages.
+#
+# Triggers on every push to main and on manual dispatch.
+# The API is NOT deployed here — host it separately (Render / Railway / Fly).
+# Set VITE_API_URL as a repository variable pointing to the hosted API:
+#   Settings → Secrets and variables → Actions → Variables → New repository variable
+#   Name:  VITE_API_URL
+#   Value: https://rpms-api.onrender.com   (or wherever you deploy the Express server)
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build SPA
+        run: npm run build
+        env:
+          GITHUB_PAGES: 'true'
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+
+      # SPA routing trick: GitHub Pages returns 404.html for unknown paths.
+      # Copying index.html → 404.html lets BrowserRouter boot on any route.
+      - name: Copy index.html to 404.html for SPA routing
+        run: cp dist/web/index.html dist/web/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
