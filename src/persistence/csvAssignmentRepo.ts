@@ -5,7 +5,6 @@
 // of its weekly runs. `(trainId, runDate)` is the natural uniqueness key for
 // active rows.
 
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -18,9 +17,8 @@ import {
   CsvRow,
   decodeDate,
   encodeDate,
-  mutateCsv,
-  readCsvUnlocked,
 } from './csvIo';
+import type { TableStore } from './tableStore';
 
 /**
  * LLD §5.3 — exact column order. M9 adds `runDate` after `trainId`.
@@ -46,11 +44,10 @@ const ASSIGNMENTS_HEADER = [
 const RUN_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export class CsvAssignmentRepo implements AssignmentRepo {
-  private readonly filePath: string;
-
-  constructor(dataDir: string) {
-    this.filePath = path.join(dataDir, 'assignments.csv');
-  }
+  constructor(
+    private readonly store: TableStore,
+    private readonly table = 'assignments',
+  ) {}
 
   async findById(
     id: string,
@@ -76,7 +73,7 @@ export class CsvAssignmentRepo implements AssignmentRepo {
       id: `ASN_${randomUUID()}`,
       createdAt: new Date(),
     };
-    await mutateCsv(this.filePath, ASSIGNMENTS_HEADER, (rows) => [
+    await this.store.mutate(this.table, ASSIGNMENTS_HEADER, (rows) => [
       ...rows,
       encodeAssignment(row),
     ]);
@@ -93,7 +90,7 @@ export class CsvAssignmentRepo implements AssignmentRepo {
     },
   ): Promise<Assignment> {
     let updated: Assignment | null = null;
-    await mutateCsv(this.filePath, ASSIGNMENTS_HEADER, (rows) => {
+    await this.store.mutate(this.table, ASSIGNMENTS_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -176,7 +173,7 @@ export class CsvAssignmentRepo implements AssignmentRepo {
 
   async archive(id: string): Promise<void> {
     const now = new Date();
-    await mutateCsv(this.filePath, ASSIGNMENTS_HEADER, (rows) => {
+    await this.store.mutate(this.table, ASSIGNMENTS_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -196,7 +193,7 @@ export class CsvAssignmentRepo implements AssignmentRepo {
   // -------------------------------------------------------------------------
 
   private async readAll(): Promise<Assignment[]> {
-    const rows = await readCsvUnlocked(this.filePath, ASSIGNMENTS_HEADER);
+    const rows = await this.store.read(this.table, ASSIGNMENTS_HEADER);
     return rows.map(decodeAssignment);
   }
 }

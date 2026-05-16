@@ -1,6 +1,8 @@
-// Csv-backed implementation of `LocoPilotRepo` (LLD §5.5).
+// Storage-backed implementation of `LocoPilotRepo` (LLD §5.5).
+//
+// Uses the `TableStore` interface so the backing store can be CSV, Google
+// Sheets, or any future adapter — the repo doesn't know or care.
 
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import { ActiveFilter, LocoPilotRepo } from '../domain/repositories';
@@ -11,9 +13,8 @@ import {
   decodePipeList,
   encodeDate,
   encodePipeList,
-  mutateCsv,
-  readCsvUnlocked,
 } from './csvIo';
+import type { TableStore } from './tableStore';
 
 /** LLD §5.3 — exact column order. */
 const LP_HEADER = [
@@ -29,11 +30,10 @@ const LP_CATEGORIES = new Set<string>(Object.values(LpCategory));
 const TRAIN_TYPES = new Set<string>(Object.values(TrainType));
 
 export class CsvLocoPilotRepo implements LocoPilotRepo {
-  private readonly filePath: string;
-
-  constructor(dataDir: string) {
-    this.filePath = path.join(dataDir, 'loco_pilots.csv');
-  }
+  constructor(
+    private readonly store: TableStore,
+    private readonly table = 'loco_pilots',
+  ) {}
 
   async findById(id: string, opts: ActiveFilter = {}): Promise<LocoPilot | null> {
     const all = await this.readAll();
@@ -50,7 +50,7 @@ export class CsvLocoPilotRepo implements LocoPilotRepo {
 
   async create(input: Omit<LocoPilot, 'id' | 'archivedAt'>): Promise<LocoPilot> {
     const row: LocoPilot = { ...input, id: `LP_${randomUUID()}` };
-    await mutateCsv(this.filePath, LP_HEADER, (rows) => [...rows, encodeLp(row)]);
+    await this.store.mutate(this.table, LP_HEADER, (rows) => [...rows, encodeLp(row)]);
     return row;
   }
 
@@ -59,7 +59,7 @@ export class CsvLocoPilotRepo implements LocoPilotRepo {
     patch: Partial<Omit<LocoPilot, 'id'>>,
   ): Promise<LocoPilot> {
     let updated: LocoPilot | null = null;
-    await mutateCsv(this.filePath, LP_HEADER, (rows) => {
+    await this.store.mutate(this.table, LP_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -78,7 +78,7 @@ export class CsvLocoPilotRepo implements LocoPilotRepo {
   }
 
   async updateLastSignOff(id: string, lastSignOffTime: Date): Promise<void> {
-    await mutateCsv(this.filePath, LP_HEADER, (rows) => {
+    await this.store.mutate(this.table, LP_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -94,7 +94,7 @@ export class CsvLocoPilotRepo implements LocoPilotRepo {
 
   async archive(id: string): Promise<void> {
     const now = new Date();
-    await mutateCsv(this.filePath, LP_HEADER, (rows) => {
+    await this.store.mutate(this.table, LP_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -112,7 +112,7 @@ export class CsvLocoPilotRepo implements LocoPilotRepo {
   // -------------------------------------------------------------------------
 
   private async readAll(): Promise<LocoPilot[]> {
-    const rows = await readCsvUnlocked(this.filePath, LP_HEADER);
+    const rows = await this.store.read(this.table, LP_HEADER);
     return rows.map(decodeLp);
   }
 }

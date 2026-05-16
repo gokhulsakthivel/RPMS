@@ -12,3 +12,9 @@ dist/
 # CSV write lock (proper-lockfile)
 data/.lock
 data/*.tmp
+
+# Environment / secrets — NEVER commit
+.env
+.env.local
+*.pem
+service-account*.json

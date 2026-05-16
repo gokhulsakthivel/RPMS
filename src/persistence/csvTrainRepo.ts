@@ -11,7 +11,6 @@
 //   • `inwardArrivalDayOffset`  — integer ≥ 0
 // The orchestrator materializes a specific run via `runSchedule.materializeRun`.
 
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -25,9 +24,8 @@ import {
   decodePipeList,
   encodeDate,
   encodePipeList,
-  mutateCsv,
-  readCsvUnlocked,
 } from './csvIo';
+import type { TableStore } from './tableStore';
 
 /**
  * LLD §5.3 — exact column order. The CSV loader asserts this on every read.
@@ -57,11 +55,10 @@ const DAYS_OF_WEEK = new Set<string>(Object.values(DayOfWeek));
 const TIME_OF_DAY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export class CsvTrainRepo implements TrainRepo {
-  private readonly filePath: string;
-
-  constructor(dataDir: string) {
-    this.filePath = path.join(dataDir, 'trains.csv');
-  }
+  constructor(
+    private readonly store: TableStore,
+    private readonly table = 'trains',
+  ) {}
 
   async findById(id: string, opts: ActiveFilter = {}): Promise<Train | null> {
     const all = await this.readAll();
@@ -98,7 +95,7 @@ export class CsvTrainRepo implements TrainRepo {
   async create(input: Omit<Train, 'id' | 'archivedAt'>): Promise<Train> {
     validateScheduleShape(input);
     const row: Train = { ...input, id: `TRN_${randomUUID()}` };
-    await mutateCsv(this.filePath, TRAINS_HEADER, (rows) => {
+    await this.store.mutate(this.table, TRAINS_HEADER, (rows) => {
       // Defence-in-depth: reject duplicate `number` (the loader catches this on
       // read, but we surface it earlier on the write path so the caller gets
       // a precise error instead of a corrupt file).
@@ -117,7 +114,7 @@ export class CsvTrainRepo implements TrainRepo {
     patch: Partial<Omit<Train, 'id'>>,
   ): Promise<Train> {
     let updated: Train | null = null;
-    await mutateCsv(this.filePath, TRAINS_HEADER, (rows) => {
+    await this.store.mutate(this.table, TRAINS_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -148,7 +145,7 @@ export class CsvTrainRepo implements TrainRepo {
 
   async archive(id: string): Promise<void> {
     const now = new Date();
-    await mutateCsv(this.filePath, TRAINS_HEADER, (rows) => {
+    await this.store.mutate(this.table, TRAINS_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -168,7 +165,7 @@ export class CsvTrainRepo implements TrainRepo {
   // -------------------------------------------------------------------------
 
   private async readAll(): Promise<Train[]> {
-    const rows = await readCsvUnlocked(this.filePath, TRAINS_HEADER);
+    const rows = await this.store.read(this.table, TRAINS_HEADER);
     return rows.map(decodeTrain);
   }
 }

@@ -6,7 +6,6 @@
 // (e.g. SICK extension while a planned LEAVE existed). The orchestrator
 // only cares that AT LEAST ONE non-archived row covers the runDate.
 
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -18,9 +17,8 @@ import {
   CsvRow,
   decodeDate,
   encodeDate,
-  mutateCsv,
-  readCsvUnlocked,
 } from './csvIo';
+import type { TableStore } from './tableStore';
 
 /** LLD §5.3 — exact column order. Keep in lockstep with `data/leaves.csv`. */
 const LEAVES_HEADER = [
@@ -45,11 +43,10 @@ const LEAVE_TYPES: ReadonlyArray<LeaveType> = [
 ];
 
 export class CsvLeaveRepo implements LeaveRepo {
-  private readonly filePath: string;
-
-  constructor(dataDir: string) {
-    this.filePath = path.join(dataDir, 'leaves.csv');
-  }
+  constructor(
+    private readonly store: TableStore,
+    private readonly table = 'leaves',
+  ) {}
 
   async findById(id: string, opts: ActiveFilter = {}): Promise<Leave | null> {
     const all = await this.readAll();
@@ -104,7 +101,7 @@ export class CsvLeaveRepo implements LeaveRepo {
       id: `LEAVE_${randomUUID()}`,
       createdAt: new Date(),
     };
-    await mutateCsv(this.filePath, LEAVES_HEADER, (rows) => [
+    await this.store.mutate(this.table, LEAVES_HEADER, (rows) => [
       ...rows,
       encodeLeave(row),
     ]);
@@ -116,7 +113,7 @@ export class CsvLeaveRepo implements LeaveRepo {
     patch: Partial<Omit<Leave, 'id' | 'createdAt'>>,
   ): Promise<Leave> {
     let updated: Leave | null = null;
-    await mutateCsv(this.filePath, LEAVES_HEADER, (rows) => {
+    await this.store.mutate(this.table, LEAVES_HEADER, (rows) => {
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
         const current = decodeLeave(r);
@@ -141,7 +138,7 @@ export class CsvLeaveRepo implements LeaveRepo {
 
   async archive(id: string): Promise<void> {
     const now = new Date();
-    await mutateCsv(this.filePath, LEAVES_HEADER, (rows) => {
+    await this.store.mutate(this.table, LEAVES_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -161,7 +158,7 @@ export class CsvLeaveRepo implements LeaveRepo {
   // -------------------------------------------------------------------------
 
   private async readAll(): Promise<Leave[]> {
-    const rows = await readCsvUnlocked(this.filePath, LEAVES_HEADER);
+    const rows = await this.store.read(this.table, LEAVES_HEADER);
     return rows.map(decodeLeave);
   }
 }
