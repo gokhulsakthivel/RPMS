@@ -12,6 +12,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "csv-parse": "^5",
     "csv-stringify": "^6",
     "express": "^4",

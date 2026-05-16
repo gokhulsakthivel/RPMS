@@ -14,6 +14,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import cors from 'cors';
 import express from 'express';
 import { CsvAssignmentDraftRepo } from '../persistence/csvAssignmentDraftRepo';
 import { CsvAssignmentRepo } from '../persistence/csvAssignmentRepo';
@@ -69,6 +70,16 @@ export function createApp(): express.Express {
   const app = express();
 
   app.use(express.json({ limit: '256kb' }));
+
+  // CORS — required when the SPA is hosted on a different origin (e.g.
+  // GitHub Pages at gokhulsakthivel.github.io) while the API runs on
+  // Render/Railway/Fly. In local dev the Vite proxy means same-origin, so
+  // the header is harmless. Restrict `origin` in production to just the
+  // Pages URL once it's live.
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',')
+    : ['http://localhost:3000'];
+  app.use(cors({ origin: allowedOrigins }));
 
   // Tiny request log — local dev only, no PII concerns. Helps when triaging
   // a flaky CSV save against a UI action.

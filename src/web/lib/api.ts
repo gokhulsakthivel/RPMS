@@ -9,8 +9,14 @@
 //      `ApiError` and decide whether to show an inline banner or a toast.
 //   3. Date inputs (`Date` objects) are serialised to ISO-8601 once, here.
 //
-// All endpoints route through Vite's dev proxy (`/api → :3001`) so the
-// browser only ever talks to :3000.
+// In development all endpoints route through Vite's dev proxy (`/api → :3001`)
+// so the browser only ever talks to :3000.
+//
+// In production (GitHub Pages), the SPA and the API live on different origins.
+// Set `VITE_API_URL` at build time (e.g. `https://rpms-api.onrender.com`) so
+// every fetch targets the remote server. When unset, paths stay relative and
+// the Vite proxy handles them.
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 import type {
   AlpCreateInput,
@@ -71,7 +77,7 @@ async function request<T>(path: string, init: RequestInitJson = {}): Promise<T> 
     ...(jsonBody !== undefined ? { 'content-type': 'application/json' } : {}),
     ...headers,
   };
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     headers: finalHeaders,
     body: jsonBody !== undefined ? JSON.stringify(jsonBody) : undefined,

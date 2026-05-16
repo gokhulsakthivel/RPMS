@@ -5,8 +5,14 @@ import path from 'node:path';
 // Vite config for the RPMS SPA. The Express API runs on :3001;
 // the dev server proxies /api/* so the browser only ever talks to :3000.
 // See techstack.md §5.
+//
+// When building for GitHub Pages, set GITHUB_PAGES=true so the `base` path
+// matches the repo name (`/RPMS/`). Asset URLs and the router must agree.
+const isGitHubPages = process.env.GITHUB_PAGES === 'true';
+
 export default defineConfig({
   plugins: [react()],
+  base: isGitHubPages ? '/RPMS/' : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
