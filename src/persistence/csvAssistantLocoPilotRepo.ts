@@ -1,6 +1,5 @@
-// Csv-backed implementation of `AssistantLocoPilotRepo` (LLD §5.5).
+// Storage-backed implementation of `AssistantLocoPilotRepo` (LLD §5.5).
 
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -14,9 +13,8 @@ import {
   decodePipeList,
   encodeDate,
   encodePipeList,
-  mutateCsv,
-  readCsvUnlocked,
 } from './csvIo';
+import type { TableStore } from './tableStore';
 
 /** LLD §5.3 — exact column order. */
 const ALP_HEADER = [
@@ -39,11 +37,10 @@ const FORBIDDEN_ALP_TYPES = new Set<TrainType>([
 ]);
 
 export class CsvAssistantLocoPilotRepo implements AssistantLocoPilotRepo {
-  private readonly filePath: string;
-
-  constructor(dataDir: string) {
-    this.filePath = path.join(dataDir, 'assistant_loco_pilots.csv');
-  }
+  constructor(
+    private readonly store: TableStore,
+    private readonly table = 'assistant_loco_pilots',
+  ) {}
 
   async findById(id: string, opts: ActiveFilter = {}): Promise<AssistantLocoPilot | null> {
     const all = await this.readAll();
@@ -63,7 +60,7 @@ export class CsvAssistantLocoPilotRepo implements AssistantLocoPilotRepo {
   ): Promise<AssistantLocoPilot> {
     enforceNoMemuDemu(input.eligibleTrainTypes);
     const row: AssistantLocoPilot = { ...input, id: `ALP_${randomUUID()}` };
-    await mutateCsv(this.filePath, ALP_HEADER, (rows) => [...rows, encodeAlp(row)]);
+    await this.store.mutate(this.table, ALP_HEADER, (rows) => [...rows, encodeAlp(row)]);
     return row;
   }
 
@@ -73,7 +70,7 @@ export class CsvAssistantLocoPilotRepo implements AssistantLocoPilotRepo {
   ): Promise<AssistantLocoPilot> {
     if (patch.eligibleTrainTypes) enforceNoMemuDemu(patch.eligibleTrainTypes);
     let updated: AssistantLocoPilot | null = null;
-    await mutateCsv(this.filePath, ALP_HEADER, (rows) => {
+    await this.store.mutate(this.table, ALP_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -92,7 +89,7 @@ export class CsvAssistantLocoPilotRepo implements AssistantLocoPilotRepo {
   }
 
   async updateLastSignOff(id: string, lastSignOffTime: Date): Promise<void> {
-    await mutateCsv(this.filePath, ALP_HEADER, (rows) => {
+    await this.store.mutate(this.table, ALP_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -108,7 +105,7 @@ export class CsvAssistantLocoPilotRepo implements AssistantLocoPilotRepo {
 
   async archive(id: string): Promise<void> {
     const now = new Date();
-    await mutateCsv(this.filePath, ALP_HEADER, (rows) => {
+    await this.store.mutate(this.table, ALP_HEADER, (rows) => {
       let saw = false;
       const next = rows.map((r) => {
         if (r['id'] !== id) return r;
@@ -128,7 +125,7 @@ export class CsvAssistantLocoPilotRepo implements AssistantLocoPilotRepo {
   // -------------------------------------------------------------------------
 
   private async readAll(): Promise<AssistantLocoPilot[]> {
-    const rows = await readCsvUnlocked(this.filePath, ALP_HEADER);
+    const rows = await this.store.read(this.table, ALP_HEADER);
     return rows.map(decodeAlp);
   }
 }

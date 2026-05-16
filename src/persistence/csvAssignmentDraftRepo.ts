@@ -13,7 +13,6 @@
 // (e.g. update/delete must carry an `assignmentId`) are enforced by
 // `assertValidDraftInput` so the repo never persists nonsensical rows.
 
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import { AssignmentDraftRepo } from '../domain/repositories';
@@ -26,9 +25,8 @@ import {
   CsvRow,
   decodeDate,
   encodeDate,
-  mutateCsv,
-  readCsvUnlocked,
 } from './csvIo';
+import type { TableStore } from './tableStore';
 
 /** Exact column order. Keep in lockstep with `data/assignment_drafts.csv`. */
 const DRAFTS_HEADER = [
@@ -59,11 +57,10 @@ const KINDS: ReadonlyArray<AssignmentDraftKind> = [
 const TRAIN_TYPES = new Set<string>(Object.values(TrainType));
 
 export class CsvAssignmentDraftRepo implements AssignmentDraftRepo {
-  private readonly filePath: string;
-
-  constructor(dataDir: string) {
-    this.filePath = path.join(dataDir, 'assignment_drafts.csv');
-  }
+  constructor(
+    private readonly store: TableStore,
+    private readonly table = 'assignment_drafts',
+  ) {}
 
   async list(opts: { runDate?: string } = {}): Promise<AssignmentDraft[]> {
     const all = await this.readAll();
@@ -86,7 +83,7 @@ export class CsvAssignmentDraftRepo implements AssignmentDraftRepo {
   ): Promise<AssignmentDraft> {
     assertValidDraftInput(input);
     let resulting: AssignmentDraft | null = null;
-    await mutateCsv(this.filePath, DRAFTS_HEADER, (rows) => {
+    await this.store.mutate(this.table, DRAFTS_HEADER, (rows) => {
       const idx = rows.findIndex(
         (r) =>
           r['trainId'] === input.trainId && r['runDate'] === input.runDate,
@@ -125,7 +122,7 @@ export class CsvAssignmentDraftRepo implements AssignmentDraftRepo {
   }
 
   async delete(id: string): Promise<void> {
-    await mutateCsv(this.filePath, DRAFTS_HEADER, (rows) =>
+    await this.store.mutate(this.table, DRAFTS_HEADER, (rows) =>
       rows.filter((r) => r['id'] !== id),
     );
   }
@@ -135,7 +132,7 @@ export class CsvAssignmentDraftRepo implements AssignmentDraftRepo {
     runDate: string,
   ): Promise<boolean> {
     let removed = false;
-    await mutateCsv(this.filePath, DRAFTS_HEADER, (rows) =>
+    await this.store.mutate(this.table, DRAFTS_HEADER, (rows) =>
       rows.filter((r) => {
         if (r['trainId'] === trainId && r['runDate'] === runDate) {
           removed = true;
@@ -149,7 +146,7 @@ export class CsvAssignmentDraftRepo implements AssignmentDraftRepo {
 
   async deleteAllForDate(runDate: string): Promise<number> {
     let count = 0;
-    await mutateCsv(this.filePath, DRAFTS_HEADER, (rows) =>
+    await this.store.mutate(this.table, DRAFTS_HEADER, (rows) =>
       rows.filter((r) => {
         if (r['runDate'] === runDate) {
           count++;
@@ -166,7 +163,7 @@ export class CsvAssignmentDraftRepo implements AssignmentDraftRepo {
   // -------------------------------------------------------------------------
 
   private async readAll(): Promise<AssignmentDraft[]> {
-    const rows = await readCsvUnlocked(this.filePath, DRAFTS_HEADER);
+    const rows = await this.store.read(this.table, DRAFTS_HEADER);
     return rows.map(decodeDraft);
   }
 }

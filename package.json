@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Railway People Management System — local-only LP/ALP assignment app.",
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"tsx watch src/api/server.ts\" \"vite\"",
-    "dev:api": "tsx watch src/api/server.ts",
+    "dev": "concurrently -n api,web -c blue,green \"tsx watch --env-file=.env src/api/server.ts\" \"vite\"",
+    "dev:api": "tsx watch --env-file=.env src/api/server.ts",
     "dev:web": "vite",
     "typecheck": "tsc --noEmit",
     "build": "vite build"
@@ -16,6 +16,7 @@
     "csv-parse": "^5",
     "csv-stringify": "^6",
     "express": "^4",
+    "googleapis": "^171.4.0",
     "proper-lockfile": "^4",
     "react": "^18",
     "react-dom": "^18",

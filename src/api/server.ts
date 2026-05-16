@@ -1,16 +1,19 @@
 // Express composition root.
 //
-// This is the *only* file in `src/api/*` allowed to instantiate `Csv*Repo`
-// concrete classes. Routers and the application layer depend on the abstract
-// `*Repo` interfaces declared in `src/domain/repositories.ts`.
+// This is the *only* file in `src/api/*` allowed to instantiate concrete
+// repo/store classes. Routers and the application layer depend on the
+// abstract `*Repo` interfaces declared in `src/domain/repositories.ts`.
+//
+// Storage backend is selected by `RPMS_STORAGE`:
+//   "csv"    (default) — local CSV files under `DATA_DIR`.
+//   "sheets" — Google Sheets (one tab per table).
 //
 // Layout:
-//   1. Resolve the data directory (defaults to ./data).
-//   2. Instantiate one repo per CSV.
+//   1. Resolve the data directory / Sheets credentials.
+//   2. Build a `TableStore` and pass it to each repo.
 //   3. Mount each router under its components.md §11 path.
-//   4. Install the centralised error middleware (LAST — Express picks the
-//      4-arg signature only after all routes).
-//   5. Start listening on PORT (default 3001 — Vite dev server is on 3000).
+//   4. Install the centralised error middleware (LAST).
+//   5. Start listening on PORT (default 3001).
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +25,9 @@ import { CsvAssistantLocoPilotRepo } from '../persistence/csvAssistantLocoPilotR
 import { CsvLeaveRepo } from '../persistence/csvLeaveRepo';
 import { CsvLocoPilotRepo } from '../persistence/csvLocoPilotRepo';
 import { CsvTrainRepo } from '../persistence/csvTrainRepo';
+import { CsvTableStore } from '../persistence/csvTableStore';
+import { SheetsTableStore } from '../persistence/sheetsTableStore';
+import type { TableStore } from '../persistence/tableStore';
 import { createAssignmentDraftsRouter } from './assignmentDrafts';
 import {
   createAssignmentsRouter,
@@ -36,11 +42,8 @@ import { createSummaryRouter } from './summary';
 import { createTrainsRouter } from './trains';
 
 // ---------------------------------------------------------------------------
-// Resolve the data directory.
+// Resolve the data directory (CSV) or Sheets credentials.
 // ---------------------------------------------------------------------------
-// We resolve relative to the repo root rather than `process.cwd()` so the
-// server behaves the same when launched via `npm run dev:api` (cwd = repo
-// root) vs `tsx src/api/server.ts` from a subdirectory.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const DATA_DIR = process.env.RPMS_DATA_DIR
@@ -48,17 +51,46 @@ const DATA_DIR = process.env.RPMS_DATA_DIR
   : path.join(REPO_ROOT, 'data');
 
 const PORT = Number.parseInt(process.env.PORT ?? '3001', 10);
+const STORAGE_BACKEND = process.env.RPMS_STORAGE ?? 'csv';
 
 // ---------------------------------------------------------------------------
-// Repos — single instances per process. The Csv* repos are stateless w.r.t.
-// the file (each call re-reads), so sharing one instance is safe and cheap.
+// TableStore — one env var picks the backend for the entire app.
 // ---------------------------------------------------------------------------
-const trains = new CsvTrainRepo(DATA_DIR);
-const lps = new CsvLocoPilotRepo(DATA_DIR);
-const alps = new CsvAssistantLocoPilotRepo(DATA_DIR);
-const assignments = new CsvAssignmentRepo(DATA_DIR);
-const leaves = new CsvLeaveRepo(DATA_DIR);
-const drafts = new CsvAssignmentDraftRepo(DATA_DIR);
+function createStore(): TableStore {
+  if (STORAGE_BACKEND === 'sheets') {
+    const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
+    const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+    if (!spreadsheetId || !serviceAccountEmail || !privateKey) {
+      throw new Error(
+        'RPMS_STORAGE=sheets requires GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_EMAIL, and GOOGLE_PRIVATE_KEY env vars.',
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.log('[api] storage backend: Google Sheets');
+    return new SheetsTableStore({
+      spreadsheetId,
+      serviceAccountEmail,
+      // The private key arrives with literal \\n — restore real newlines.
+      privateKey: privateKey.replace(/\\n/g, '\n'),
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[api] storage backend: CSV (${DATA_DIR})`);
+  return new CsvTableStore(DATA_DIR);
+}
+
+const store = createStore();
+
+// ---------------------------------------------------------------------------
+// Repos — single instances per process, backed by the shared store.
+// ---------------------------------------------------------------------------
+const trains = new CsvTrainRepo(store);
+const lps = new CsvLocoPilotRepo(store);
+const alps = new CsvAssistantLocoPilotRepo(store);
+const assignments = new CsvAssignmentRepo(store);
+const leaves = new CsvLeaveRepo(store);
+const drafts = new CsvAssignmentDraftRepo(store);
 
 const repoDeps = { trains, lps, alps, assignments, leaves };
 const draftDeps = { drafts, ...repoDeps };
@@ -91,7 +123,7 @@ export function createApp(): express.Express {
 
   // Health check — useful for the Vite proxy "is the api up yet?" probe.
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, dataDir: DATA_DIR });
+    res.json({ ok: true, storage: STORAGE_BACKEND, dataDir: DATA_DIR });
   });
 
   // Mount per components.md §11.
@@ -125,6 +157,6 @@ if (isEntry) {
   const app = createApp();
   app.listen(PORT, () => {
     // eslint-disable-next-line no-console
-    console.log(`[api] listening on http://localhost:${PORT} (data=${DATA_DIR})`);
+    console.log(`[api] listening on http://localhost:${PORT} (storage=${STORAGE_BACKEND})`);
   });
 }
