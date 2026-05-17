@@ -1,8 +1,9 @@
 // In-memory caching decorator for any TableStore.
 //
 // Wraps a delegate store and caches `read()` results per table for a
-// configurable TTL. After `mutate()` the cache for that table is
-// invalidated so the next `read()` fetches fresh data.
+// configurable TTL. After `mutate()` the cache is updated in-place with
+// the post-transform result so back-to-back mutations (e.g. the commit
+// loop) reuse the warm cache instead of re-reading from the delegate.
 //
 // This is critical for the Google Sheets backend where every read is an
 // HTTP round-trip to the Sheets API (which enforces per-minute quotas).
@@ -77,11 +78,38 @@ export class CachedTableStore implements TableStore {
     header: readonly string[],
     transform: (rows: Row[]) => Row[] | Promise<Row[]>,
   ): Promise<void> {
-    // Delegate the actual write.
-    await this.delegate.mutate(table, header, transform);
-    // Invalidate cached data for this table — the next read() will fetch
-    // fresh data from the Sheets API.
-    this.invalidate(table);
+    const key = this.cacheKey(table, header);
+
+    // If the cache is warm, pass it to the delegate as `knownRows` so
+    // backends with expensive reads (Google Sheets) can skip the round-trip.
+    const cached = this.cache.get(key);
+    const knownRows =
+      cached && Date.now() < cached.expiresAt
+        ? this.deepCopyRows(cached.rows)
+        : undefined;
+
+    // Wrap the transform to capture the post-mutation result. The captured
+    // rows are used to update the cache in-place — subsequent reads and
+    // mutations hit the warm cache instead of re-reading from the delegate.
+    let captured: Row[] | undefined;
+    const wrappedTransform = async (rows: Row[]) => {
+      const result = await transform(rows);
+      captured = result.map((r) => ({ ...r }));
+      return result;
+    };
+
+    await this.delegate.mutate(table, header, wrappedTransform, knownRows);
+
+    // Update cache in-place with the mutation result so the next operation
+    // on this table (read or another mutate) hits the warm cache.
+    if (captured) {
+      this.cache.set(key, {
+        rows: captured,
+        expiresAt: Date.now() + this.ttlMs,
+      });
+    } else {
+      this.invalidate(table);
+    }
   }
 
   // ---------------------------------------------------------------------------

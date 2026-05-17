@@ -99,6 +99,7 @@ export function createAssignmentDraftsRouter(
   //       binding `commit` to the parametric route on the wrong method.
   //       (They're different verbs so no conflict, but ordering keeps the
   //        file readable as a top-down spec.)
+
   router.post(
     '/commit',
     asyncHandler(async (req, res) => {
@@ -110,10 +111,22 @@ export function createAssignmentDraftsRouter(
       );
 
       const results: AssignmentDraftCommitResult[] = [];
+      const successfulDraftIds: string[] = [];
       for (const d of drafts) {
         const result = await commitOne(deps, d);
         results.push(result);
+        if (result.success) {
+          successfulDraftIds.push(d.id);
+        }
       }
+
+      // Batch-delete all successful drafts in a single mutation instead of
+      // deleting one at a time inside commitOne. This reduces Sheets API
+      // round-trips from N to 1 for the assignment_drafts table.
+      if (successfulDraftIds.length > 0) {
+        await deps.drafts.deleteMany(successfulDraftIds);
+      }
+
       const body: AssignmentDraftCommitResponse = { results };
       res.json(body);
     }),
@@ -179,7 +192,7 @@ async function commitOne(
         lpId: d.lpId,
         ...(d.alpId ? { alpId: d.alpId } : {}),
       });
-      return persistOnSuccess(deps, d, r);
+      return persistOnSuccess(d, r);
     }
     if (d.kind === 'update') {
       if (!d.assignmentId) {
@@ -213,7 +226,7 @@ async function commitOne(
         // orchestrator rejects otherwise). `alpId: undefined` leaves it.
         alpId: d.alpId ?? null,
       });
-      return persistOnSuccess(deps, d, r);
+      return persistOnSuccess(d, r);
     }
     // delete
     if (!d.assignmentId) {
@@ -238,7 +251,6 @@ async function commitOne(
     // stale draft against a row another operator has already archived
     // succeeds without double-rolling the rest clocks.
     await archiveAssignment(deps, d.assignmentId);
-    await deps.drafts.delete(d.id);
     return { trainId: d.trainId, success: true };
   } catch (e) {
     return failure(d.trainId, {
@@ -249,12 +261,11 @@ async function commitOne(
 }
 
 async function persistOnSuccess(
-  deps: AssignmentDraftsRouterDeps,
   d: AssignmentDraft,
   r: { ok: true } | { ok: false; error: AssignmentError },
 ): Promise<AssignmentDraftCommitResult> {
   if (r.ok) {
-    await deps.drafts.delete(d.id);
+    // Draft deletion is batched at the end of the commit loop.
     return { trainId: d.trainId, success: true };
   }
   return failure(d.trainId, { ...r.error });

@@ -127,6 +127,14 @@ export class CsvAssignmentDraftRepo implements AssignmentDraftRepo {
     );
   }
 
+  async deleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    await this.store.mutate(this.table, DRAFTS_HEADER, (rows) =>
+      rows.filter((r) => !idSet.has(r['id'] ?? '')),
+    );
+  }
+
   async deleteByTrainAndDate(
     trainId: string,
     runDate: string,

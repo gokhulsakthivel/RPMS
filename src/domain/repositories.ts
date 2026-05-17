@@ -132,6 +132,9 @@ export interface AssignmentDraftRepo {
   upsert(input: Omit<AssignmentDraft, 'id' | 'createdAt'>): Promise<AssignmentDraft>;
   /** Hard-delete a single draft row by id. */
   delete(id: string): Promise<void>;
+
+  /** Hard-delete multiple draft rows by id in a single mutation. */
+  deleteMany(ids: string[]): Promise<void>;
   /** Hard-delete the (at most one) draft for `(trainId, runDate)`. Returns true if a row was removed. */
   deleteByTrainAndDate(trainId: string, runDate: string): Promise<boolean>;
   /** Hard-delete every draft for an IST run-date. Returns the count removed. */
