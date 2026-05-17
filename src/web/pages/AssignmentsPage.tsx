@@ -93,6 +93,18 @@ export function AssignmentsPage() {
     };
   }, [selectedDate, tick]);
 
+  // Prefetch eligible crew for every train on this date as soon as the row
+  // list arrives. The responses land in the 30 s client-side cache, so any
+  // subsequent modal open (Assign or Edit) is served instantly from cache
+  // instead of making a blocking round-trip to the Sheets-backed API.
+  useEffect(() => {
+    if (!rows) return;
+    for (const row of rows) {
+      // Fire-and-forget — errors are swallowed; the modal will retry on open.
+      assignmentsApi.eligibleCrew(row.trainId, row.runDate).catch(() => {});
+    }
+  }, [rows]);
+
   useEffect(() => {
     let cancelled = false;
     assignmentDraftsApi
