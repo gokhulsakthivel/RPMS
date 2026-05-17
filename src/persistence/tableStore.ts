@@ -32,10 +32,16 @@ export interface TableStore {
    * passes them to `transform`, and writes the result back — all under
    * whatever concurrency guard the backend provides (file lock for CSV,
    * optimistic CAS for Sheets, transaction for SQL, etc.).
+   *
+   * `knownRows` — optional pre-read snapshot. When supplied the backend
+   * MAY skip its own read and use these rows as the starting point for
+   * `transform`. Callers (e.g. CachedTableStore) pass their warm cache
+   * here to eliminate redundant round-trips on backends with quota limits.
    */
   mutate(
     table: string,
     header: readonly string[],
     transform: (rows: Row[]) => Row[] | Promise<Row[]>,
+    knownRows?: Row[],
   ): Promise<void>;
 }

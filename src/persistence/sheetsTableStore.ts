@@ -24,6 +24,11 @@ export interface SheetsTableStoreConfig {
   privateKey: string;
 }
 
+/** Max retries for transient Sheets API errors (429, 5xx). */
+const MAX_RETRIES = 3;
+/** Base delay (ms) before first retry — doubled on each subsequent attempt. */
+const BASE_DELAY_MS = 500;
+
 export class SheetsTableStore implements TableStore {
   private readonly spreadsheetId: string;
   private readonly sheets: sheets_v4.Sheets;
@@ -42,12 +47,14 @@ export class SheetsTableStore implements TableStore {
 
   async read(table: string, header: readonly string[]): Promise<Row[]> {
     const range = `${table}!A:${columnLetter(header.length)}`;
-    const res = await this.sheets.spreadsheets.values.get({
-      spreadsheetId: this.spreadsheetId,
-      range,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-      dateTimeRenderOption: 'FORMATTED_STRING',
-    });
+    const res = await retryOnTransient(() =>
+      this.sheets.spreadsheets.values.get({
+        spreadsheetId: this.spreadsheetId,
+        range,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+        dateTimeRenderOption: 'FORMATTED_STRING',
+      }),
+    );
 
     const values = res.data.values;
     if (!values || values.length === 0) {
@@ -84,9 +91,30 @@ export class SheetsTableStore implements TableStore {
     table: string,
     header: readonly string[],
     transform: (rows: Row[]) => Row[] | Promise<Row[]>,
+    knownRows?: Row[],
   ): Promise<void> {
-    // 1. Read current state.
-    const current = await this.read(table, header);
+    // 1. Use caller-supplied snapshot when available (CachedTableStore passes
+    //    its warm cache here to skip the Sheets read round-trip). Otherwise
+    //    read from Sheets, tolerating an empty/broken tab so the transform
+    //    can self-heal the data.
+    let current: Row[];
+    let oldRowCount: number;
+    if (knownRows) {
+      current = knownRows;
+      oldRowCount = knownRows.length;
+    } else {
+      try {
+        current = await this.read(table, header);
+        oldRowCount = current.length;
+      } catch (e) {
+        if (e instanceof SheetsSchemaError) {
+          current = [];
+          oldRowCount = 0;
+        } else {
+          throw e;
+        }
+      }
+    }
 
     // 2. Apply transform.
     const next = await transform(current);
@@ -98,20 +126,33 @@ export class SheetsTableStore implements TableStore {
     );
     const allValues = [headerValues, ...dataValues];
 
-    // 4. Clear the tab and write back.
-    const range = `${table}!A:${columnLetter(header.length)}`;
+    const colLetter = columnLetter(header.length);
 
-    await this.sheets.spreadsheets.values.clear({
-      spreadsheetId: this.spreadsheetId,
-      range,
-    });
+    // 4. Write first, then clean up stale trailing rows.
+    //    This ordering ensures that if the write succeeds but the cleanup
+    //    fails, the sheet still contains valid (possibly extra) data rather
+    //    than being left blank.
+    await retryOnTransient(() =>
+      this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.spreadsheetId,
+        range: `${table}!A1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: allValues },
+      }),
+    );
 
-    await this.sheets.spreadsheets.values.update({
-      spreadsheetId: this.spreadsheetId,
-      range: `${table}!A1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: allValues },
-    });
+    // header occupies row 1, so old data ends at row (oldRowCount + 1).
+    // New data ends at row allValues.length. Clear any leftover rows.
+    const newEndRow = allValues.length;
+    const oldEndRow = oldRowCount + 1; // +1 for header row
+    if (oldEndRow > newEndRow) {
+      await retryOnTransient(() =>
+        this.sheets.spreadsheets.values.clear({
+          spreadsheetId: this.spreadsheetId,
+          range: `${table}!A${newEndRow + 1}:${colLetter}${oldEndRow}`,
+        }),
+      );
+    }
   }
 }
 
@@ -132,6 +173,39 @@ function columnLetter(n: number): string {
     num = Math.floor(num / 26);
   }
   return result;
+}
+
+/**
+ * Retry a Sheets API call on transient errors (HTTP 429 rate-limit and 5xx
+ * server errors) with exponential back-off. Non-retriable errors propagate
+ * immediately.
+ */
+async function retryOnTransient<T>(fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (e: unknown) {
+      lastError = e;
+      if (attempt === MAX_RETRIES || !isTransientSheetsError(e)) {
+        throw e;
+      }
+      const delay = BASE_DELAY_MS * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastError; // unreachable but satisfies TS
+}
+
+function isTransientSheetsError(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false;
+  const status = (e as { code?: number }).code ?? (e as { status?: number }).status;
+  if (status === 429) return true; // rate-limited
+  if (typeof status === 'number' && status >= 500) return true; // server error
+  // GaxiosError wraps HTTP status in `response.status`.
+  const resp = (e as { response?: { status?: number } }).response;
+  if (resp?.status === 429 || (resp?.status && resp.status >= 500)) return true;
+  return false;
 }
 
 /** Thrown when the sheet tab's header doesn't match the expected schema. */

@@ -19,7 +19,9 @@ export class CsvTableStore implements TableStore {
     table: string,
     header: readonly string[],
     transform: (rows: Row[]) => Row[] | Promise<Row[]>,
+    _knownRows?: Row[],
   ): Promise<void> {
+    // CSV reads are fast local I/O — always read fresh, ignore knownRows.
     return mutateCsv(this.filePath(table), header, transform);
   }
 
