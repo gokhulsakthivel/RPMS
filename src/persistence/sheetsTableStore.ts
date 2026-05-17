@@ -85,8 +85,22 @@ export class SheetsTableStore implements TableStore {
     header: readonly string[],
     transform: (rows: Row[]) => Row[] | Promise<Row[]>,
   ): Promise<void> {
-    // 1. Read current state.
-    const current = await this.read(table, header);
+    // 1. Read current state. If the sheet is empty or has a mismatched header
+    //    (e.g. after a previous failed write), treat as zero rows so the
+    //    transform can still produce a valid result and self-heal the tab.
+    let current: Row[];
+    let oldRowCount: number;
+    try {
+      current = await this.read(table, header);
+      oldRowCount = current.length;
+    } catch (e) {
+      if (e instanceof SheetsSchemaError) {
+        current = [];
+        oldRowCount = 0;
+      } else {
+        throw e;
+      }
+    }
 
     // 2. Apply transform.
     const next = await transform(current);
@@ -98,20 +112,29 @@ export class SheetsTableStore implements TableStore {
     );
     const allValues = [headerValues, ...dataValues];
 
-    // 4. Clear the tab and write back.
-    const range = `${table}!A:${columnLetter(header.length)}`;
+    const colLetter = columnLetter(header.length);
 
-    await this.sheets.spreadsheets.values.clear({
-      spreadsheetId: this.spreadsheetId,
-      range,
-    });
-
+    // 4. Write first, then clean up stale trailing rows.
+    //    This ordering ensures that if the write succeeds but the cleanup
+    //    fails, the sheet still contains valid (possibly extra) data rather
+    //    than being left blank.
     await this.sheets.spreadsheets.values.update({
       spreadsheetId: this.spreadsheetId,
       range: `${table}!A1`,
       valueInputOption: 'RAW',
       requestBody: { values: allValues },
     });
+
+    // header occupies row 1, so old data ends at row (oldRowCount + 1).
+    // New data ends at row allValues.length. Clear any leftover rows.
+    const newEndRow = allValues.length;
+    const oldEndRow = oldRowCount + 1; // +1 for header row
+    if (oldEndRow > newEndRow) {
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId: this.spreadsheetId,
+        range: `${table}!A${newEndRow + 1}:${colLetter}${oldEndRow}`,
+      });
+    }
   }
 }
 
