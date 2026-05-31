@@ -33,9 +33,12 @@ export function EligibleCrewSelect({
   invalid,
   'aria-describedby': describedBy,
 }: EligibleCrewSelectProps) {
+
   // Split by rest status. `restHoursRemaining === 0` means rested.
   const rested = options.filter((o) => o.restHoursRemaining <= 0);
-  const resting = options.filter((o) => o.restHoursRemaining > 0);
+  const resting = options
+    .filter((o) => o.restHoursRemaining > 0)
+    .sort((a, b) => a.restHoursRemaining - b.restHoursRemaining);
 
   return (
     <Select
