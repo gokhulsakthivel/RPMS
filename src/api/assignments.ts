@@ -26,7 +26,7 @@ import {
   listCrewForAssignment,
 } from '../application/listCrewForAssignment';
 import { updateAssignment } from '../application/updateAssignment';
-import { requiresAlp } from '../domain/requiresAlp';
+import { requiredAlpCount, requiresAlp } from '../domain/requiresAlp';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
@@ -135,16 +135,20 @@ export function createAssignmentsRouter(deps: AssignmentsRouterDeps): Router {
       // The orchestrator THROWS for missing rows (see comment in assignCrew.ts
       // step 0) — that path remains for the "should-never-happen" case where
       // a row vanishes between this check and the orchestrator call.
-      const [train, lp, alpEntity] = await Promise.all([
+      const [train, lp, alpEntity, alp2Entity] = await Promise.all([
         deps.trains.findById(input.trainId, { includeArchived: true }),
         deps.lps.findById(input.lpId, { includeArchived: true }),
         input.alpId
           ? deps.alps.findById(input.alpId, { includeArchived: true })
           : Promise.resolve(null),
+        input.alpId2
+          ? deps.alps.findById(input.alpId2, { includeArchived: true })
+          : Promise.resolve(null),
       ]);
       if (!train) throw new NotFoundError('TRAIN', input.trainId);
       if (!lp) throw new NotFoundError('LP', input.lpId);
       if (input.alpId && !alpEntity) throw new NotFoundError('ALP', input.alpId);
+      if (input.alpId2 && !alp2Entity) throw new NotFoundError('ALP', input.alpId2);
 
       const result = await assignCrew(deps, input);
       if (!result.ok) {
@@ -185,6 +189,7 @@ export function createAssignmentsRouter(deps: AssignmentsRouterDeps): Router {
         assignmentId: id,
         ...(patch.lpId !== undefined ? { lpId: patch.lpId } : {}),
         ...(patch.alpId !== undefined ? { alpId: patch.alpId } : {}),
+        ...(patch.alpId2 !== undefined ? { alpId2: patch.alpId2 } : {}),
       });
       if (!result.ok) {
         sendRuleError(res, result.error);
@@ -262,14 +267,18 @@ export function createEligibleCrewRouter(deps: AssignmentsRouterDeps): Router {
       const alpsById = indexById(allAlps);
 
       const eligibleLpSummaries: LpSummary[] = filtered.eligibleLps
-        .map((c) => lpsById.get(c.id))
-        .filter((lp): lp is LocoPilot => !!lp)
-        .map(lpToSummary);
+        .map((c) => {
+          const lp = lpsById.get(c.id);
+          return lp ? lpToSummary(lp, c.restHoursRemaining) : null;
+        })
+        .filter((s): s is LpSummary => s !== null);
 
       const eligibleAlpSummaries: LpSummary[] = filtered.eligibleAlps
-        .map((c) => alpsById.get(c.id))
-        .filter((alp): alp is AssistantLocoPilot => !!alp)
-        .map(alpToSummary);
+        .map((c) => {
+          const alp = alpsById.get(c.id);
+          return alp ? alpToSummary(alp, c.restHoursRemaining) : null;
+        })
+        .filter((s): s is LpSummary => s !== null);
 
       const response: EligibleCrewResponse = {
         train: trainToRow(train, runDate, run),
@@ -281,6 +290,7 @@ export function createEligibleCrewRouter(deps: AssignmentsRouterDeps): Router {
           ? {
               eligible: eligibleAlpSummaries,
               hidden: bucketsToHiddenCount(filtered.filteredOutAlps),
+              requiredCount: requiredAlpCount(train.type) === 2 ? 2 : 1,
             }
           : null,
       };
@@ -318,7 +328,6 @@ function bucketsToHiddenCount(
   const counts: HiddenCount = {
     notEligible: 0,
     onLeave: 0,
-    resting: 0,
     alreadyAssigned: 0,
   };
   for (const b of buckets) {
@@ -329,9 +338,6 @@ function bucketsToHiddenCount(
         break;
       case 'on_leave':
         counts.onLeave = b.crewIds.length;
-        break;
-      case 'still_resting':
-        counts.resting = b.crewIds.length;
         break;
       case 'already_assigned':
         counts.alreadyAssigned = b.crewIds.length;
@@ -349,6 +355,7 @@ function serializeAssignment(a: Assignment) {
     runDate: a.runDate,
     lpId: a.lpId,
     alpId: a.alpId,
+    alpId2: a.alpId2,
     departureTime: a.departureTime.toISOString(),
     signOffTime: a.signOffTime.toISOString(),
     createdAt: a.createdAt.toISOString(),

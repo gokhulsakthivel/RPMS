@@ -1,1 +1,1 @@
-id,kind,trainId,trainNumber,trainName,trainType,runDate,departureTime,assignmentId,lpId,lpName,alpId,alpName,originalLpName,originalAlpName,createdAt
+id,kind,trainId,trainNumber,trainName,trainType,runDate,departureTime,assignmentId,lpId,lpName,alpId,alpName,alpId2,alpName2,originalLpName,originalAlpName,originalAlpName2,createdAt

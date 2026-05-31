@@ -98,6 +98,7 @@ export function stagedCrewIds(
     if (op.kind === 'delete') continue;
     lpIds.add(op.lpId);
     if (op.alpId) alpIds.add(op.alpId);
+    if (op.alpId2) alpIds.add(op.alpId2);
   }
   return { lpIds, alpIds };
 }

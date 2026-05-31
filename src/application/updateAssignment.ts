@@ -31,12 +31,11 @@
 //   snapshot one-deep — exactly enough to undo this single Edit/Delete —
 //   while preserving the audit trail in the CSV.
 
-import { hasSufficientRest, MIN_REST_HOURS } from '../domain/hasSufficientRest';
 import { findWindowConflict } from '../domain/hasWindowConflict';
 import { isAlpEligible } from '../domain/isAlpEligible';
 import { isLpEligible } from '../domain/isLpEligible';
 import { findCoveringLeave } from '../domain/isOnLeave';
-import { requiresAlp } from '../domain/requiresAlp';
+import { requiredAlpCount } from '../domain/requiresAlp';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
@@ -71,6 +70,11 @@ export interface UpdateAssignmentInput {
    * orchestrator rejects clears for ALP-required trains).
    */
   alpId?: string | null;
+  /**
+   * Optional new second ALP (Amrit Bharat). Same semantics as `alpId`:
+   * omit to keep, `null` to clear (rejected for trains that need two ALPs).
+   */
+  alpId2?: string | null;
 }
 
 /**
@@ -117,18 +121,26 @@ export async function updateAssignment(
 
   const departureTimeUtc = existing.departureTime;
   const signOffTimeUtc = existing.signOffTime;
-  const needsAlp = requiresAlp(train.type);
+  const alpCount = requiredAlpCount(train.type);
+  const needsAlp = alpCount > 0;
+  const needsTwoAlps = alpCount === 2;
 
   // ------- Resolve the effective LP id / ALP id after the patch is
   //         applied. Unchanged slots use the existing values.
   const newLpId = input.lpId ?? existing.lpId;
   const newAlpId =
     input.alpId === undefined ? existing.alpId ?? undefined : input.alpId ?? undefined;
+  const newAlpId2 =
+    input.alpId2 === undefined
+      ? existing.alpId2 ?? undefined
+      : input.alpId2 ?? undefined;
 
   const lpChanged = newLpId !== existing.lpId;
   const alpChanged = (input.alpId !== undefined) && (newAlpId !== existing.alpId);
+  const alp2Changed =
+    (input.alpId2 !== undefined) && (newAlpId2 !== existing.alpId2);
 
-  if (!lpChanged && !alpChanged) {
+  if (!lpChanged && !alpChanged && !alp2Changed) {
     // Nothing actually moved — short-circuit to avoid noisy CSV writes.
     return ok(existing);
   }
@@ -151,6 +163,17 @@ export async function updateAssignment(
     }
     if (alp.archivedAt) {
       return err({ code: 'ARCHIVED_ENTITY', entity: 'ALP', id: alp.id });
+    }
+  }
+
+  let alp2 = null as Awaited<ReturnType<AssistantLocoPilotRepo['findById']>>;
+  if (newAlpId2 !== undefined) {
+    alp2 = await deps.alps.findById(newAlpId2, { includeArchived: true });
+    if (!alp2) {
+      throw new Error(`updateAssignment: alp not found: ${newAlpId2}`);
+    }
+    if (alp2.archivedAt) {
+      return err({ code: 'ARCHIVED_ENTITY', entity: 'ALP', id: alp2.id });
     }
   }
 
@@ -177,17 +200,8 @@ export async function updateAssignment(
     }
   }
 
-  // ------- Step 2: LP rest. Only check when the LP changed — keeping an
-  //         existing LP would always trip rest (their lastSignOffTime was
-  //         set to THIS assignment's signOffTime when it was created).
-  if (lpChanged && !hasSufficientRest(lp, departureTimeUtc)) {
-    return err({
-      code: 'LP_REST_VIOLATION',
-      lpId: lp.id,
-      requiredHours: MIN_REST_HOURS,
-      actualHours: hoursBetween(lp.lastSignOffTime, departureTimeUtc),
-    });
-  }
+  // ------- Step 2: LP rest — no longer enforced. Operators may swap in
+  //         any LP regardless of the 16-hour window.
 
   // ------- Step 3: LP window-overlap. Exclude THIS assignment from the
   //         candidate's active set so an unchanged LP doesn't conflict
@@ -233,14 +247,7 @@ export async function updateAssignment(
           toDate: alpOnLeave.toDate,
         });
       }
-      if (!hasSufficientRest(alp, departureTimeUtc)) {
-        return err({
-          code: 'ALP_REST_VIOLATION',
-          alpId: alp.id,
-          requiredHours: MIN_REST_HOURS,
-          actualHours: hoursBetween(alp.lastSignOffTime, departureTimeUtc),
-        });
-      }
+      // ALP rest — no longer enforced (see LP step 2).
       const alpAssignments = (await deps.assignments.listByCrew(alp.id)).filter(
         (a) => a.id !== existing.id,
       );
@@ -256,10 +263,57 @@ export async function updateAssignment(
         });
       }
     }
-  } else if (alp) {
-    // MEMU/DEMU: ALP supplied where none is allowed. Cleared assignments
-    // (`alp === null` resolved above) hit this branch with `alp == null`,
-    // so they fall through to the persistence step.
+
+    // -- Second ALP slot (Amrit Bharat).
+    if (needsTwoAlps) {
+      if (!alp2) {
+        return err({
+          code: 'SECOND_ALP_REQUIRED_BUT_MISSING',
+          trainType: train.type,
+        });
+      }
+      if (alp2.id === alp.id) {
+        return err({ code: 'ALP_DUPLICATE', alpId: alp.id });
+      }
+      if (!isAlpEligible(alp2, train.type)) {
+        return err({
+          code: 'ALP_NOT_ELIGIBLE',
+          alpId: alp2.id,
+          trainType: train.type,
+        });
+      }
+      if (alp2Changed) {
+        const alp2Leaves = await deps.leaves.listByCrew(alp2.id);
+        const alp2OnLeave = findCoveringLeave(alp2Leaves, existing.runDate);
+        if (alp2OnLeave) {
+          return err({
+            code: 'ALP_ON_LEAVE',
+            alpId: alp2.id,
+            leaveType: alp2OnLeave.type,
+            fromDate: alp2OnLeave.fromDate,
+            toDate: alp2OnLeave.toDate,
+          });
+        }
+        const alp2Assignments = (
+          await deps.assignments.listByCrew(alp2.id)
+        ).filter((a) => a.id !== existing.id);
+        const alp2Conflict = findWindowConflict(
+          { departureTime: departureTimeUtc, signOffTime: signOffTimeUtc },
+          alp2Assignments,
+        );
+        if (alp2Conflict) {
+          return err({
+            code: 'ALP_WINDOW_CONFLICT',
+            alpId: alp2.id,
+            conflictingAssignmentId: alp2Conflict.id,
+          });
+        }
+      }
+    } else if (alp2) {
+      return err({ code: 'SECOND_ALP_NOT_ALLOWED', trainType: train.type });
+    }
+  } else if (alp || alp2) {
+    // MEMU/DEMU: ALP supplied where none is allowed.
     return err({ code: 'ALP_NOT_ALLOWED', trainType: train.type });
   }
 
@@ -270,8 +324,10 @@ export async function updateAssignment(
   const patch: {
     lpId?: string;
     alpId?: string | null;
+    alpId2?: string | null;
     previousLpSignOffTime?: Date | null;
     previousAlpSignOffTime?: Date | null;
+    previousAlpSignOffTime2?: Date | null;
   } = {};
 
   if (lpChanged) {
@@ -307,6 +363,20 @@ export async function updateAssignment(
     }
   }
 
+  if (input.alpId2 !== undefined) {
+    patch.alpId2 = alp2 ? alp2.id : null;
+    if (existing.alpId2 && (!alp2 || alp2.id !== existing.alpId2)) {
+      await deps.alps.update(existing.alpId2, {
+        lastSignOffTime: existing.previousAlpSignOffTime2,
+      });
+    }
+    if (alp2 && alp2.id !== existing.alpId2) {
+      patch.previousAlpSignOffTime2 = alp2.lastSignOffTime ?? null;
+    } else if (!alp2 && existing.alpId2) {
+      patch.previousAlpSignOffTime2 = null;
+    }
+  }
+
   // ------- Persist. Repo's `update` is the single CSV-write site.
   const updated = await deps.assignments.update(existing.id, patch);
 
@@ -320,16 +390,9 @@ export async function updateAssignment(
   if (alpChanged && alp) {
     await deps.alps.updateLastSignOff(alp.id, signOffTimeUtc);
   }
+  if (alp2Changed && alp2) {
+    await deps.alps.updateLastSignOff(alp2.id, signOffTimeUtc);
+  }
 
   return ok(updated);
-}
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
-function hoursBetween(from: Date | undefined, to: Date): number {
-  if (!from) return Number.POSITIVE_INFINITY;
-  const ms = to.getTime() - from.getTime();
-  return Math.round((ms / 3_600_000) * 10) / 10;
 }

@@ -1,8 +1,10 @@
-// `EligibleCrewSelect` — single-select dropdown of eligible crew, with a
-// mini-grade badge inside each option (components.md §10).
+// `EligibleCrewSelect` — single-select dropdown of eligible crew, split into
+// two `<optgroup>`s by rest status (components.md §10).
 //
-// Pre-filtered server-side — the SPA never re-runs eligibility / rest /
-// overlap rules. The dropdown is a thin <select> over `LpSummary[]`.
+// The 16-hour rest gate is no longer enforced server-side, so resting crew
+// appear in the list under "Not yet rested (16h)" with the remaining hours
+// labelled per option. Rested crew sit in the top group so the operator's
+// muscle-memory pick is still the safest pick by default.
 
 import type { LpSummary } from '../../../shared/schemas';
 import { longFormLabel } from '../../lib/grade';
@@ -31,6 +33,10 @@ export function EligibleCrewSelect({
   invalid,
   'aria-describedby': describedBy,
 }: EligibleCrewSelectProps) {
+  // Split by rest status. `restHoursRemaining === 0` means rested.
+  const rested = options.filter((o) => o.restHoursRemaining <= 0);
+  const resting = options.filter((o) => o.restHoursRemaining > 0);
+
   return (
     <Select
       id={id}
@@ -45,12 +51,37 @@ export function EligibleCrewSelect({
           ? 'No eligible crew available'
           : placeholder}
       </option>
-      {options.map((opt) => (
-        <option key={opt.id} value={opt.id}>
-          {opt.name}
-          {opt.grade ? ` — ${longFormLabel(opt.grade)}` : ''}
-        </option>
-      ))}
+      {rested.length > 0 ? (
+        <optgroup label="Rested (16h+)">
+          {rested.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {formatRestedLabel(opt)}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      {resting.length > 0 ? (
+        <optgroup label="Not yet rested">
+          {resting.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {formatRestingLabel(opt)}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
     </Select>
   );
 }
+
+function formatRestedLabel(opt: LpSummary): string {
+  const grade = opt.grade ? ` — ${longFormLabel(opt.grade)}` : '';
+  return `${opt.name}${grade} · rested`;
+}
+
+function formatRestingLabel(opt: LpSummary): string {
+  const grade = opt.grade ? ` — ${longFormLabel(opt.grade)}` : '';
+  // Round up so "0.1h" doesn't render as "0h remaining".
+  const hours = Math.ceil(opt.restHoursRemaining);
+  return `${opt.name}${grade} · ${hours}h rest remaining`;
+}
+

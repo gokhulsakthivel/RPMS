@@ -191,6 +191,7 @@ async function commitOne(
         runDate: d.runDate,
         lpId: d.lpId,
         ...(d.alpId ? { alpId: d.alpId } : {}),
+        ...(d.alpId2 ? { alpId2: d.alpId2 } : {}),
       });
       return persistOnSuccess(d, r);
     }
@@ -225,6 +226,7 @@ async function commitOne(
         // `alpId: null` clears the slot (only valid on MEMU/DEMU — the
         // orchestrator rejects otherwise). `alpId: undefined` leaves it.
         alpId: d.alpId ?? null,
+        alpId2: d.alpId2 ?? null,
       });
       return persistOnSuccess(d, r);
     }
@@ -303,6 +305,8 @@ function draftToWire(d: AssignmentDraft): AssignmentDraftRow {
         lpName: d.lpName ?? '',
         alpId: d.alpId ?? null,
         alpName: d.alpName ?? null,
+        alpId2: d.alpId2 ?? null,
+        alpName2: d.alpName2 ?? null,
       };
     case 'update':
       return {
@@ -311,10 +315,13 @@ function draftToWire(d: AssignmentDraft): AssignmentDraftRow {
         assignmentId: d.assignmentId ?? '',
         originalLpName: d.originalLpName ?? '',
         originalAlpName: d.originalAlpName ?? null,
+        originalAlpName2: d.originalAlpName2 ?? null,
         lpId: d.lpId ?? '',
         lpName: d.lpName ?? '',
         alpId: d.alpId ?? null,
         alpName: d.alpName ?? null,
+        alpId2: d.alpId2 ?? null,
+        alpName2: d.alpName2 ?? null,
       };
     case 'delete':
       return {
@@ -323,6 +330,7 @@ function draftToWire(d: AssignmentDraft): AssignmentDraftRow {
         assignmentId: d.assignmentId ?? '',
         lpName: d.lpName ?? '',
         alpName: d.alpName ?? null,
+        alpName2: d.alpName2 ?? null,
       };
   }
 }
@@ -348,6 +356,8 @@ function stageInputToRepoInput(
         lpName: input.lpName,
         ...(input.alpId ? { alpId: input.alpId } : {}),
         ...(input.alpName ? { alpName: input.alpName } : {}),
+        ...(input.alpId2 ? { alpId2: input.alpId2 } : {}),
+        ...(input.alpName2 ? { alpName2: input.alpName2 } : {}),
       };
     case 'update':
       return {
@@ -358,9 +368,14 @@ function stageInputToRepoInput(
         lpName: input.lpName,
         ...(input.alpId ? { alpId: input.alpId } : {}),
         ...(input.alpName ? { alpName: input.alpName } : {}),
+        ...(input.alpId2 ? { alpId2: input.alpId2 } : {}),
+        ...(input.alpName2 ? { alpName2: input.alpName2 } : {}),
         originalLpName: input.originalLpName,
         ...(input.originalAlpName
           ? { originalAlpName: input.originalAlpName }
+          : {}),
+        ...(input.originalAlpName2
+          ? { originalAlpName2: input.originalAlpName2 }
           : {}),
       };
     case 'delete':
@@ -370,6 +385,7 @@ function stageInputToRepoInput(
         assignmentId: input.assignmentId,
         ...(input.lpName ? { lpName: input.lpName } : {}),
         ...(input.alpName ? { alpName: input.alpName } : {}),
+        ...(input.alpName2 ? { alpName2: input.alpName2 } : {}),
       };
   }
 }

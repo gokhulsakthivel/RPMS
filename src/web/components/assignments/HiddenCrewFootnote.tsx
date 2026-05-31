@@ -14,12 +14,12 @@ export interface HiddenCrewFootnoteProps {
 }
 
 export function HiddenCrewFootnote({ counts }: HiddenCrewFootnoteProps) {
-  // Build the "Hidden: X not eligible, Y still resting, Z already assigned"
-  // copy. Skip zero-count buckets so the line stays scannable. If no
-  // buckets have hidden crew, render nothing.
+  // Build the "Hidden: X not eligible, Z already assigned" copy. Skip
+  // zero-count buckets so the line stays scannable. Resting crew are NOT
+  // hidden anymore — they appear in the dropdown under "Not yet rested".
   const parts: string[] = [];
   if (counts.notEligible > 0) parts.push(`${counts.notEligible} not eligible`);
-  if (counts.resting > 0) parts.push(`${counts.resting} still resting`);
+  if (counts.onLeave > 0) parts.push(`${counts.onLeave} on leave`);
   if (counts.alreadyAssigned > 0) parts.push(`${counts.alreadyAssigned} already assigned`);
 
   if (parts.length === 0) return null;

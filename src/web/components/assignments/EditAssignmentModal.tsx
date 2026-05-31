@@ -49,6 +49,8 @@ export interface EditAssignmentModalProps {
   initialLpId?: string | null;
   /** Pre-selected ALP — used when re-editing an already-staged draft. */
   initialAlpId?: string | null;
+  /** Pre-selected second ALP (Amrit Bharat) — used when re-editing a draft. */
+  initialAlpId2?: string | null;
   /**
    * The page-level draft cart. Used to hide crew already claimed by
    * staged ops on OTHER trains so the operator never offers the same
@@ -69,6 +71,7 @@ export function EditAssignmentModal({
   target,
   initialLpId,
   initialAlpId,
+  initialAlpId2,
   staged,
   onClose,
   onStage,
@@ -82,6 +85,7 @@ export function EditAssignmentModal({
   // currently-assigned crew show as pre-selected.
   const [lpId, setLpId] = useState<string | null>(null);
   const [alpId, setAlpId] = useState<string | null>(null);
+  const [alpId2, setAlpId2] = useState<string | null>(null);
 
   // Resolve the form's "initial" state — the staged draft wins over the
   // persisted row when both exist.
@@ -96,6 +100,12 @@ export function EditAssignmentModal({
       ? initialAlpId
       : target && target.alp && target.alp !== 'NOT_REQUIRED'
         ? target.alp.id
+        : null;
+  const baselineAlpId2 =
+    initialAlpId2 !== undefined && initialAlpId2 !== null
+      ? initialAlpId2
+      : target && target.alp2 && target.alp2 !== 'NOT_REQUIRED'
+        ? target.alp2.id
         : null;
 
   // Reset transient state on each open.
@@ -141,6 +151,7 @@ export function EditAssignmentModal({
     // values.
     setLpId(baselineLpId);
     setAlpId(baselineAlpId);
+    setAlpId2(baselineAlpId2);
     setServerError(null);
   }
 
@@ -152,7 +163,13 @@ export function EditAssignmentModal({
     const persistedLpId = target.lp ? target.lp.id : null;
     const persistedAlpId =
       target.alp && target.alp !== 'NOT_REQUIRED' ? target.alp.id : null;
-    if (lpId === persistedLpId && alpId === persistedAlpId) {
+    const persistedAlpId2 =
+      target.alp2 && target.alp2 !== 'NOT_REQUIRED' ? target.alp2.id : null;
+    if (
+      lpId === persistedLpId &&
+      alpId === persistedAlpId &&
+      alpId2 === persistedAlpId2
+    ) {
       onClose();
       return;
     }
@@ -163,7 +180,7 @@ export function EditAssignmentModal({
     const lpOpt =
       eligible.loco_pilots.eligible.find((o) => o.id === lpId) ??
       (target.lp && target.lp.id === lpId
-        ? { id: target.lp.id, name: target.lp.name, grade: null }
+        ? { id: target.lp.id, name: target.lp.name, grade: null, restHoursRemaining: 0 }
         : null);
     if (!lpOpt) {
       setServerError('Selected Loco Pilot is no longer eligible. Please reselect.');
@@ -173,7 +190,14 @@ export function EditAssignmentModal({
       eligible.assistant_loco_pilots && alpId
         ? eligible.assistant_loco_pilots.eligible.find((o) => o.id === alpId) ??
           (target.alp && target.alp !== 'NOT_REQUIRED' && target.alp.id === alpId
-            ? { id: target.alp.id, name: target.alp.name, grade: null }
+            ? { id: target.alp.id, name: target.alp.name, grade: null, restHoursRemaining: 0 }
+            : null)
+        : null;
+    const alp2Opt =
+      eligible.assistant_loco_pilots?.requiredCount === 2 && alpId2
+        ? eligible.assistant_loco_pilots.eligible.find((o) => o.id === alpId2) ??
+          (target.alp2 && target.alp2 !== 'NOT_REQUIRED' && target.alp2.id === alpId2
+            ? { id: target.alp2.id, name: target.alp2.name, grade: null, restHoursRemaining: 0 }
             : null)
         : null;
 
@@ -189,22 +213,32 @@ export function EditAssignmentModal({
       originalLpName: target.lp ? target.lp.name : '',
       originalAlpName:
         target.alp && target.alp !== 'NOT_REQUIRED' ? target.alp.name : null,
+      originalAlpName2:
+        target.alp2 && target.alp2 !== 'NOT_REQUIRED' ? target.alp2.name : null,
       lpId: lpOpt.id,
       lpName: lpOpt.name,
       alpId: alpOpt ? alpOpt.id : null,
       alpName: alpOpt ? alpOpt.name : null,
+      alpId2: alp2Opt ? alp2Opt.id : null,
+      alpName2: alp2Opt ? alp2Opt.name : null,
     });
   }
 
   const requiresAlp = !!eligible?.assistant_loco_pilots;
+  const requiresTwoAlps =
+    eligible?.assistant_loco_pilots?.requiredCount === 2;
   const canSave =
     !!target &&
     !!target.assignmentId &&
     !loading &&
     !!eligible &&
     !!lpId &&
-    (!requiresAlp || !!alpId);
-  const canReset = lpId !== baselineLpId || alpId !== baselineAlpId;
+    (!requiresAlp || !!alpId) &&
+    (!requiresTwoAlps || !!alpId2);
+  const canReset =
+    lpId !== baselineLpId ||
+    alpId !== baselineAlpId ||
+    alpId2 !== baselineAlpId2;
 
   // Crew already claimed by staged ops on OTHER trains. We exclude the
   // current train's own op so re-editing a draft doesn't make its own
@@ -226,12 +260,21 @@ export function EditAssignmentModal({
   const eligibleAlp = eligible?.assistant_loco_pilots?.eligible ?? [];
   const filteredLp = eligibleLp.filter((o) => !claimed.lpIds.has(o.id));
   const filteredAlp = eligibleAlp.filter((o) => !claimed.alpIds.has(o.id));
+  // ALP-1 / ALP-2 must additionally hide whoever is picked in the OTHER
+  // ALP slot so the operator can never assign the same person twice.
+  const filteredAlp1 = filteredAlp.filter((o) => o.id !== alpId2);
+  const filteredAlp2 = filteredAlp.filter((o) => o.id !== alpId);
   const lpStagedHidden = eligibleLp.length - filteredLp.length;
-  const alpStagedHidden = eligibleAlp.length - filteredAlp.length;
+  const alpStagedHidden = eligibleAlp.length - filteredAlp1.length;
+  const alp2StagedHidden = eligibleAlp.length - filteredAlp2.length;
   const lpOptions = withCurrentSelection(filteredLp, target?.lp ?? null);
   const alpOptions = withCurrentSelection(
-    filteredAlp,
+    filteredAlp1,
     target && target.alp !== 'NOT_REQUIRED' ? target.alp : null,
+  );
+  const alp2Options = withCurrentSelection(
+    filteredAlp2,
+    target && target.alp2 !== 'NOT_REQUIRED' ? target.alp2 : null,
   );
 
   return (
@@ -305,7 +348,14 @@ export function EditAssignmentModal({
           </FormField>
 
           {eligible.assistant_loco_pilots ? (
-            <FormField label="Assistant Loco Pilot" required>
+            <FormField
+              label={
+                requiresTwoAlps
+                  ? 'Assistant Loco Pilot 1'
+                  : 'Assistant Loco Pilot'
+              }
+              required
+            >
               {({ id }) => (
                 <>
                   <EligibleCrewSelect
@@ -330,6 +380,29 @@ export function EditAssignmentModal({
               {longTrainTypeName(target?.trainType)} trains do not require an ALP.
             </p>
           )}
+
+          {requiresTwoAlps ? (
+            <FormField label="Assistant Loco Pilot 2" required>
+              {({ id }) => (
+                <>
+                  <EligibleCrewSelect
+                    id={id}
+                    options={alp2Options}
+                    value={alpId2}
+                    onChange={setAlpId2}
+                  />
+                  <HiddenCrewFootnote
+                    counts={{
+                      ...eligible.assistant_loco_pilots!.hidden,
+                      alreadyAssigned:
+                        eligible.assistant_loco_pilots!.hidden.alreadyAssigned +
+                        alp2StagedHidden,
+                    }}
+                  />
+                </>
+              )}
+            </FormField>
+          ) : null}
         </>
       ) : null}
     </Modal>
@@ -351,7 +424,7 @@ function withCurrentSelection(
   if (options.some((o) => o.id === current.id)) return options;
   // Synthesise a minimal option. `grade: null` because we don't have the
   // crew row hydrated here; the dropdown still renders the name correctly.
-  return [{ id: current.id, name: current.name, grade: null }, ...options];
+  return [{ id: current.id, name: current.name, grade: null, restHoursRemaining: 0 }, ...options];
 }
 
 function longTrainTypeName(t?: string): string {

@@ -70,6 +70,11 @@ export async function archiveAssignment(
       lastSignOffTime: existing.previousAlpSignOffTime,
     });
   }
+  if (existing.alpId2) {
+    await deps.alps.update(existing.alpId2, {
+      lastSignOffTime: existing.previousAlpSignOffTime2,
+    });
+  }
 
   await deps.assignments.archive(existing.id);
 }

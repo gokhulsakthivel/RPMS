@@ -51,6 +51,8 @@ export interface AssignCrewModalProps {
   initialLpId?: string | null;
   /** Pre-selected ALP — used when re-editing an already-staged draft. */
   initialAlpId?: string | null;
+  /** Pre-selected second ALP (Amrit Bharat) — used when re-editing a draft. */
+  initialAlpId2?: string | null;
   /**
    * The page-level draft cart. Used to hide crew already claimed by
    * staged ops on OTHER trains so the operator never offers the same
@@ -71,6 +73,7 @@ export function AssignCrewModal({
   target,
   initialLpId = null,
   initialAlpId = null,
+  initialAlpId2 = null,
   staged,
   onClose,
   onStage,
@@ -81,6 +84,7 @@ export function AssignCrewModal({
 
   const [lpId, setLpId] = useState<string | null>(null);
   const [alpId, setAlpId] = useState<string | null>(null);
+  const [alpId2, setAlpId2] = useState<string | null>(null);
 
   // Reset transient state on each open and pre-fill from `initial*` if
   // provided (re-edit of an existing staged draft).
@@ -88,6 +92,7 @@ export function AssignCrewModal({
     if (!target) return;
     setLpId(initialLpId);
     setAlpId(initialAlpId);
+    setAlpId2(initialAlpId2);
     setServerError(null);
     setEligible(null);
 
@@ -134,6 +139,7 @@ export function AssignCrewModal({
     // repopulate instantly.
     setLpId(initialLpId);
     setAlpId(initialAlpId);
+    setAlpId2(initialAlpId2);
     setServerError(null);
   }
 
@@ -149,10 +155,21 @@ export function AssignCrewModal({
   // staged-but-not-yet-persisted picks).
   const eligibleLp = eligible?.loco_pilots.eligible ?? [];
   const eligibleAlp = eligible?.assistant_loco_pilots?.eligible ?? [];
+  const requiredAlpCount = eligible?.assistant_loco_pilots?.requiredCount ?? 0;
   const lpOptions = eligibleLp.filter((o) => !claimed.lpIds.has(o.id));
-  const alpOptions = eligibleAlp.filter((o) => !claimed.alpIds.has(o.id));
+  // First-ALP options exclude crew already claimed by other staged ops AND
+  // anyone picked for the second-ALP slot on this same row.
+  const alpOptions = eligibleAlp.filter(
+    (o) => !claimed.alpIds.has(o.id) && o.id !== alpId2,
+  );
+  // Second-ALP options additionally exclude whoever was picked for the
+  // first slot, so the operator can never assign the same person twice.
+  const alp2Options = eligibleAlp.filter(
+    (o) => !claimed.alpIds.has(o.id) && o.id !== alpId,
+  );
   const lpStagedHidden = eligibleLp.length - lpOptions.length;
   const alpStagedHidden = eligibleAlp.length - alpOptions.length;
+  const alp2StagedHidden = eligibleAlp.length - alp2Options.length;
 
   function save() {
     if (!target || !lpId || !eligible) return;
@@ -167,6 +184,10 @@ export function AssignCrewModal({
       eligible.assistant_loco_pilots && alpId
         ? alpOptions.find((o) => o.id === alpId) ?? null
         : null;
+    const alp2Opt =
+      eligible.assistant_loco_pilots?.requiredCount === 2 && alpId2
+        ? alp2Options.find((o) => o.id === alpId2) ?? null
+        : null;
 
     onStage({
       kind: 'create',
@@ -180,6 +201,8 @@ export function AssignCrewModal({
       lpName: lpOpt.name,
       alpId: alpOpt ? alpOpt.id : null,
       alpName: alpOpt ? alpOpt.name : null,
+      alpId2: alp2Opt ? alp2Opt.id : null,
+      alpName2: alp2Opt ? alp2Opt.name : null,
     });
     // Parent typically closes the modal in response. We don't call
     // onClose() here so the parent retains full control.
@@ -187,15 +210,18 @@ export function AssignCrewModal({
 
   // Derived guards for the submit button.
   const requiresAlp = !!eligible?.assistant_loco_pilots;
+  const requiresTwoAlps = requiredAlpCount === 2;
   const canSubmit =
     !!target &&
     !loading &&
     !!eligible &&
     !!lpId &&
-    (!requiresAlp || !!alpId);
+    (!requiresAlp || !!alpId) &&
+    (!requiresTwoAlps || !!alpId2);
   // Reset is only meaningful when the buffered picks differ from the
   // modal's initial values (fresh: both null; re-edit: originally staged).
-  const canReset = lpId !== initialLpId || alpId !== initialAlpId;
+  const canReset =
+    lpId !== initialLpId || alpId !== initialAlpId || alpId2 !== initialAlpId2;
 
   return (
     <Modal
@@ -274,7 +300,14 @@ export function AssignCrewModal({
           </FormField>
 
           {eligible.assistant_loco_pilots ? (
-            <FormField label="Assistant Loco Pilot" required>
+            <FormField
+              label={
+                requiresTwoAlps
+                  ? 'Assistant Loco Pilot 1'
+                  : 'Assistant Loco Pilot'
+              }
+              required
+            >
               {({ id }) => (
                 <>
                   <EligibleCrewSelect
@@ -299,6 +332,29 @@ export function AssignCrewModal({
               {longTrainTypeName(target?.trainType)} trains do not require an ALP.
             </p>
           )}
+
+          {requiresTwoAlps ? (
+            <FormField label="Assistant Loco Pilot 2" required>
+              {({ id }) => (
+                <>
+                  <EligibleCrewSelect
+                    id={id}
+                    options={alp2Options}
+                    value={alpId2}
+                    onChange={setAlpId2}
+                  />
+                  <HiddenCrewFootnote
+                    counts={{
+                      ...eligible.assistant_loco_pilots!.hidden,
+                      alreadyAssigned:
+                        eligible.assistant_loco_pilots!.hidden.alreadyAssigned +
+                        alp2StagedHidden,
+                    }}
+                  />
+                </>
+              )}
+            </FormField>
+          ) : null}
         </>
       ) : null}
     </Modal>

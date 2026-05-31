@@ -15,12 +15,11 @@
 // those for every downstream rule check. The Assignment is persisted with
 // the `runDate` so `(trainId, runDate)` is the natural uniqueness key.
 
-import { hasSufficientRest, MIN_REST_HOURS } from '../domain/hasSufficientRest';
 import { findWindowConflict } from '../domain/hasWindowConflict';
 import { isAlpEligible } from '../domain/isAlpEligible';
 import { isLpEligible } from '../domain/isLpEligible';
 import { findCoveringLeave } from '../domain/isOnLeave';
-import { requiresAlp } from '../domain/requiresAlp';
+import { requiredAlpCount } from '../domain/requiresAlp';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
@@ -53,6 +52,8 @@ export interface AssignCrewInput {
   runDate: string;
   lpId: string;
   alpId?: string;
+  /** Second ALP — only allowed when `requiredAlpCount(train.type) === 2`. */
+  alpId2?: string;
 }
 
 /**
@@ -105,7 +106,9 @@ export async function assignCrew(
     return err({ code: 'ARCHIVED_ENTITY', entity: 'LP', id: lp.id });
   }
 
-  const needsAlp = requiresAlp(train.type);
+  const alpCount = requiredAlpCount(train.type);
+  const needsAlp = alpCount > 0;
+  const needsTwoAlps = alpCount === 2;
 
   // alp is loaded only if supplied; we still load before any checks so the
   // ARCHIVED_ENTITY error fires before less-specific ones (LLD §3.6 step 0).
@@ -117,6 +120,17 @@ export async function assignCrew(
     }
     if (alp.archivedAt) {
       return err({ code: 'ARCHIVED_ENTITY', entity: 'ALP', id: alp.id });
+    }
+  }
+
+  let alp2 = null as Awaited<ReturnType<AssistantLocoPilotRepo['findById']>>;
+  if (input.alpId2 !== undefined) {
+    alp2 = await deps.alps.findById(input.alpId2, { includeArchived: true });
+    if (!alp2) {
+      throw new Error(`assignCrew: alp not found: ${input.alpId2}`);
+    }
+    if (alp2.archivedAt) {
+      return err({ code: 'ARCHIVED_ENTITY', entity: 'ALP', id: alp2.id });
     }
   }
 
@@ -164,15 +178,9 @@ export async function assignCrew(
     });
   }
 
-  // ------- Step 2: LP rest. Anchored to the materialized UTC departure.
-  if (!hasSufficientRest(lp, departureTimeUtc)) {
-    return err({
-      code: 'LP_REST_VIOLATION',
-      lpId: lp.id,
-      requiredHours: MIN_REST_HOURS,
-      actualHours: hoursBetween(lp.lastSignOffTime, departureTimeUtc),
-    });
-  }
+  // ------- Step 2: LP rest — no longer enforced. Operators may assign any
+  //         LP regardless of the 16-hour window; the dropdown surfaces rest
+  //         remaining for situational awareness.
 
   // ------- Step 3: LP window-overlap.
   // Active assignments only — repo defaults to `archivedAt IS NULL`.
@@ -213,14 +221,7 @@ export async function assignCrew(
         toDate: alpOnLeave.toDate,
       });
     }
-    if (!hasSufficientRest(alp, departureTimeUtc)) {
-      return err({
-        code: 'ALP_REST_VIOLATION',
-        alpId: alp.id,
-        requiredHours: MIN_REST_HOURS,
-        actualHours: hoursBetween(alp.lastSignOffTime, departureTimeUtc),
-      });
-    }
+    // ALP rest — no longer enforced (see LP step 2).
     const alpAssignments = await deps.assignments.listByCrew(alp.id);
     const alpConflict = findWindowConflict(
       { departureTime: departureTimeUtc, signOffTime: signOffTimeUtc },
@@ -233,7 +234,55 @@ export async function assignCrew(
         conflictingAssignmentId: alpConflict.id,
       });
     }
-  } else if (alp) {
+
+    // -- Second ALP slot (Amrit Bharat). The two ALPs go through identical
+    //    eligibility / leave / window checks; we additionally reject a row
+    //    that names the same crew member in both slots.
+    if (needsTwoAlps) {
+      if (!alp2) {
+        return err({
+          code: 'SECOND_ALP_REQUIRED_BUT_MISSING',
+          trainType: train.type,
+        });
+      }
+      if (alp2.id === alp.id) {
+        return err({ code: 'ALP_DUPLICATE', alpId: alp.id });
+      }
+      if (!isAlpEligible(alp2, train.type)) {
+        return err({
+          code: 'ALP_NOT_ELIGIBLE',
+          alpId: alp2.id,
+          trainType: train.type,
+        });
+      }
+      const alp2Leaves = await deps.leaves.listByCrew(alp2.id);
+      const alp2OnLeave = findCoveringLeave(alp2Leaves, input.runDate);
+      if (alp2OnLeave) {
+        return err({
+          code: 'ALP_ON_LEAVE',
+          alpId: alp2.id,
+          leaveType: alp2OnLeave.type,
+          fromDate: alp2OnLeave.fromDate,
+          toDate: alp2OnLeave.toDate,
+        });
+      }
+      const alp2Assignments = await deps.assignments.listByCrew(alp2.id);
+      const alp2Conflict = findWindowConflict(
+        { departureTime: departureTimeUtc, signOffTime: signOffTimeUtc },
+        alp2Assignments,
+      );
+      if (alp2Conflict) {
+        return err({
+          code: 'ALP_WINDOW_CONFLICT',
+          alpId: alp2.id,
+          conflictingAssignmentId: alp2Conflict.id,
+        });
+      }
+    } else if (alp2) {
+      // Train type only requires one ALP but a second was supplied.
+      return err({ code: 'SECOND_ALP_NOT_ALLOWED', trainType: train.type });
+    }
+  } else if (alp || alp2) {
     // MEMU/DEMU: ALP supplied where none is allowed.
     return err({ code: 'ALP_NOT_ALLOWED', trainType: train.type });
   }
@@ -255,6 +304,7 @@ export async function assignCrew(
     runDate: input.runDate,
     lpId: lp.id,
     alpId: alp?.id,
+    alpId2: alp2?.id,
     departureTime: departureTimeUtc,
     signOffTime: signOffTimeUtc,
     ...(lp.lastSignOffTime
@@ -263,11 +313,17 @@ export async function assignCrew(
     ...(alp?.lastSignOffTime
       ? { previousAlpSignOffTime: alp.lastSignOffTime }
       : {}),
+    ...(alp2?.lastSignOffTime
+      ? { previousAlpSignOffTime2: alp2.lastSignOffTime }
+      : {}),
   });
 
   await deps.lps.updateLastSignOff(lp.id, signOffTimeUtc);
   if (alp) {
     await deps.alps.updateLastSignOff(alp.id, signOffTimeUtc);
+  }
+  if (alp2) {
+    await deps.alps.updateLastSignOff(alp2.id, signOffTimeUtc);
   }
 
   // `now` is referenced for tests that pin time; the orchestrator itself does
@@ -277,20 +333,4 @@ export async function assignCrew(
   void now;
 
   return ok(created);
-}
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Hours between `from` and `to`, rounded down to one decimal. Returns
- * `Number.POSITIVE_INFINITY` for a brand-new crew member (no `lastSignOffTime`)
- * — matches the "never signed off → unlimited rest" treatment in
- * `hasSufficientRest`.
- */
-function hoursBetween(from: Date | undefined, to: Date): number {
-  if (!from) return Number.POSITIVE_INFINITY;
-  const ms = to.getTime() - from.getTime();
-  return Math.round((ms / 3_600_000) * 10) / 10;
 }

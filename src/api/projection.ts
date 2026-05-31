@@ -21,7 +21,7 @@ import {
   lpDrivableTypes,
 } from '../domain/highestGrade';
 import { hoursRestRemaining, MIN_REST_HOURS } from '../domain/hasSufficientRest';
-import { requiresAlp } from '../domain/requiresAlp';
+import { requiredAlpCount, requiresAlp } from '../domain/requiresAlp';
 import type { MaterializedRun } from '../domain/runSchedule';
 import {
   Assignment,
@@ -109,7 +109,16 @@ export function trainWithAssignment(
     alp = null;
   }
 
-  return { ...base, lp, alp };
+  let alp2: TrainWithAssignment['alp2'];
+  if (requiredAlpCount(train.type) !== 2) {
+    alp2 = 'NOT_REQUIRED';
+  } else if (current && current.alpId2) {
+    alp2 = lookupNamed(current.alpId2, alpsById);
+  } else {
+    alp2 = null;
+  }
+
+  return { ...base, lp, alp, alp2 };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,10 +156,21 @@ export function assignmentRowForTrain(
     alp = null;
   }
 
+  const alpCount = requiredAlpCount(train.type);
+  let alp2: AssignmentRow['alp2'];
+  if (alpCount !== 2) {
+    alp2 = 'NOT_REQUIRED';
+  } else if (current && current.alpId2) {
+    alp2 = lookupNamed(current.alpId2, alpsById);
+  } else {
+    alp2 = null;
+  }
+
   // A train is assignable iff at least one slot it requires is unfilled.
   const lpFilled = lp !== null;
   const alpFilled = alp === 'NOT_REQUIRED' || (alp !== null && alp !== undefined);
-  const isAssignable = !(lpFilled && alpFilled);
+  const alp2Filled = alp2 === 'NOT_REQUIRED' || (alp2 !== null && alp2 !== undefined);
+  const isAssignable = !(lpFilled && alpFilled && alp2Filled);
 
   return {
     trainId: train.id,
@@ -161,6 +181,7 @@ export function assignmentRowForTrain(
     departureTime: run.departureTimeUtc.toISOString(),
     lp,
     alp,
+    alp2,
     isAssignable,
     // Active assignment id powers the Edit / Delete row actions. `null`
     // when nothing has been assigned to this train + runDate yet.
@@ -229,11 +250,21 @@ export function alpToCrewRow(alp: AssistantLocoPilot, restAnchor: Date): CrewRow
 // Crew → LpSummary (the AssignCrewModal dropdown shape)
 // ---------------------------------------------------------------------------
 
-export function lpToSummary(lp: LocoPilot): LpSummary {
-  return { id: lp.id, name: lp.name, grade: highestGrade(lpDrivableTypes(lp)) ?? null };
+export function lpToSummary(lp: LocoPilot, restHoursRemaining: number): LpSummary {
+  return {
+    id: lp.id,
+    name: lp.name,
+    grade: highestGrade(lpDrivableTypes(lp)) ?? null,
+    restHoursRemaining,
+  };
 }
-export function alpToSummary(alp: AssistantLocoPilot): LpSummary {
-  return { id: alp.id, name: alp.name, grade: highestGrade(alpDrivableTypes(alp)) ?? null };
+export function alpToSummary(alp: AssistantLocoPilot, restHoursRemaining: number): LpSummary {
+  return {
+    id: alp.id,
+    name: alp.name,
+    grade: highestGrade(alpDrivableTypes(alp)) ?? null,
+    restHoursRemaining,
+  };
 }
 
 // ---------------------------------------------------------------------------

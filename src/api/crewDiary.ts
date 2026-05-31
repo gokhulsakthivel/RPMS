@@ -158,6 +158,9 @@ function toDiaryEntry(
   trainsById: ReadonlyMap<string, Train>,
 ): CrewDiaryEntry {
   const train = trainsById.get(a.trainId);
+  // ALP-2 (Amrit Bharat) carries the same `'ALP'` discriminator as ALP-1 —
+  // the diary surfaces "this crew member rode that train"; which slot they
+  // filled is incidental.
   const servedAs: 'LP' | 'ALP' = a.lpId === crew.id ? 'LP' : 'ALP';
   return {
     assignmentId: a.id,

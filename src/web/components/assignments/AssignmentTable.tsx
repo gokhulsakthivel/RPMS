@@ -88,6 +88,11 @@ export function AssignmentTable({
       cell: (r) => renderCrewCell(r, staged.get(r.trainId), 'alp'),
     },
     {
+      key: 'alp2',
+      header: 'ALP 2',
+      cell: (r) => renderCrewCell(r, staged.get(r.trainId), 'alp2'),
+    },
+    {
       key: 'action',
       header: '',
       align: 'right',
@@ -175,12 +180,19 @@ export function AssignmentTable({
 function renderCrewCell(
   row: AssignmentRow,
   op: StagedOp | undefined,
-  slot: 'lp' | 'alp',
+  slot: 'lp' | 'alp' | 'alp2',
 ): React.ReactNode {
-  // ----- ALP slot is always "Not required" on MEMU/DEMU regardless of
-  //       whatever op is staged — we never let the operator force an ALP
-  //       on a train that doesn't take one.
+  // ----- ALP slots are "Not required" on trains that don't take that
+  //       slot (MEMU/DEMU → no ALP at all; non-Amrit-Bharat → no second
+  //       ALP) regardless of whatever op is staged.
   if (slot === 'alp' && row.alp === 'NOT_REQUIRED') {
+    return (
+      <span className="assign-table__crew assign-table__crew--na">
+        Not required
+      </span>
+    );
+  }
+  if (slot === 'alp2' && row.alp2 === 'NOT_REQUIRED') {
     return (
       <span className="assign-table__crew assign-table__crew--na">
         Not required
@@ -194,9 +206,13 @@ function renderCrewCell(
       ? row.lp
         ? row.lp.name
         : null
-      : row.alp && row.alp !== 'NOT_REQUIRED'
-        ? row.alp.name
-        : null;
+      : slot === 'alp'
+        ? row.alp && row.alp !== 'NOT_REQUIRED'
+          ? row.alp.name
+          : null
+        : row.alp2 && row.alp2 !== 'NOT_REQUIRED'
+          ? row.alp2.name
+          : null;
 
   if (!op) {
     return persistedName ? (
@@ -221,7 +237,8 @@ function renderCrewCell(
   }
 
   if (op.kind === 'create') {
-    const stagedName = slot === 'lp' ? op.lpName : op.alpName;
+    const stagedName =
+      slot === 'lp' ? op.lpName : slot === 'alp' ? op.alpName : op.alpName2;
     if (!stagedName) {
       // ALP slot but train doesn't require one — `create` op carries
       // alpName: null. Render the persisted (nothing) state.
@@ -240,9 +257,14 @@ function renderCrewCell(
   }
 
   // op.kind === 'update'
-  const stagedName = slot === 'lp' ? op.lpName : op.alpName;
+  const stagedName =
+    slot === 'lp' ? op.lpName : slot === 'alp' ? op.alpName : op.alpName2;
   const originalName =
-    slot === 'lp' ? op.originalLpName || persistedName : op.originalAlpName;
+    slot === 'lp'
+      ? op.originalLpName || persistedName
+      : slot === 'alp'
+        ? op.originalAlpName
+        : op.originalAlpName2;
   if (!stagedName) {
     // Possible only on the ALP slot when the train doesn't require one —
     // shouldn't really occur for `update` since Edit doesn't open on

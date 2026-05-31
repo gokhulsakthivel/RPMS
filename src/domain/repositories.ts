@@ -71,9 +71,10 @@ export interface AssignmentRepo {
   /**
    * Patch the crew on an existing active assignment. The (trainId, runDate)
    * uniqueness key and timestamps are immutable through this path — only
-   * `lpId` / `alpId` and the per-crew `previousSignOffTime` snapshots may be
-   * modified. `alpId: null` clears the slot; `previousLpSignOffTime: null` /
-   * `previousAlpSignOffTime: null` clear the snapshot when the prior crew had
+   * `lpId` / `alpId` / `alpId2` and the per-crew `previousSignOffTime` snapshots
+   * may be modified. `alpId: null` / `alpId2: null` clears the slot;
+   * `previousLpSignOffTime: null` / `previousAlpSignOffTime: null` /
+   * `previousAlpSignOffTime2: null` clear the snapshot when the prior crew had
    * never signed off. Throws if `id` is not found or already archived.
    */
   update(
@@ -81,8 +82,10 @@ export interface AssignmentRepo {
     patch: {
       lpId?: string;
       alpId?: string | null;
+      alpId2?: string | null;
       previousLpSignOffTime?: Date | null;
       previousAlpSignOffTime?: Date | null;
+      previousAlpSignOffTime2?: Date | null;
     },
   ): Promise<Assignment>;
   list(opts?: ActiveFilter & { departingWithin?: DateRange }): Promise<Assignment[]>;

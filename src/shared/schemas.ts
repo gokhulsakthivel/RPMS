@@ -256,6 +256,8 @@ export const AssignCrewInput = z.object({
   runDate: isoCalendarDate,
   lpId: nonEmptyString,
   alpId: nonEmptyString.optional(),
+  /** Second ALP — only used when the train type requires two ALPs (Amrit Bharat). */
+  alpId2: nonEmptyString.optional(),
 });
 export type AssignCrewInput = z.infer<typeof AssignCrewInput>;
 
@@ -278,10 +280,13 @@ export const AssignmentUpdateInput = z
   .object({
     lpId: nonEmptyString.optional(),
     alpId: nonEmptyString.nullable().optional(),
+    /** Second ALP slot — only used for Amrit Bharat. `null` clears it. */
+    alpId2: nonEmptyString.nullable().optional(),
   })
-  .refine((v) => v.lpId !== undefined || v.alpId !== undefined, {
-    message: 'at least one of lpId / alpId must be supplied',
-  });
+  .refine(
+    (v) => v.lpId !== undefined || v.alpId !== undefined || v.alpId2 !== undefined,
+    { message: 'at least one of lpId / alpId / alpId2 must be supplied' },
+  );
 export type AssignmentUpdateInput = z.infer<typeof AssignmentUpdateInput>;
 
 // ---------------------------------------------------------------------------
@@ -319,6 +324,9 @@ const assignmentDraftCreateSchema = z.object({
   /** Null when the train type doesn't require an ALP (MEMU/DEMU). */
   alpId: nonEmptyString.nullable(),
   alpName: z.string().nullable(),
+  /** Second ALP — set only for train types requiring two ALPs (Amrit Bharat). */
+  alpId2: nonEmptyString.nullable().optional(),
+  alpName2: z.string().nullable().optional(),
 });
 
 const assignmentDraftUpdateSchema = z.object({
@@ -328,11 +336,14 @@ const assignmentDraftUpdateSchema = z.object({
   /** Snapshot of the row's previously-persisted crew (display-only). */
   originalLpName: z.string(),
   originalAlpName: z.string().nullable(),
+  originalAlpName2: z.string().nullable().optional(),
   /** New picks. */
   lpId: nonEmptyString,
   lpName: nonEmptyString,
   alpId: nonEmptyString.nullable(),
   alpName: z.string().nullable(),
+  alpId2: nonEmptyString.nullable().optional(),
+  alpName2: z.string().nullable().optional(),
 });
 
 const assignmentDraftDeleteSchema = z.object({
@@ -342,6 +353,7 @@ const assignmentDraftDeleteSchema = z.object({
   /** Snapshot of the crew about to be archived (display-only). */
   lpName: z.string(),
   alpName: z.string().nullable(),
+  alpName2: z.string().nullable().optional(),
 });
 
 /**
@@ -496,6 +508,14 @@ export interface AssignmentRow {
     | { id: string; name: string } // assigned
     | null                          // eligible-but-empty → "Not assigned"
     | 'NOT_REQUIRED';               // MEMU/DEMU sentinel
+  /**
+   * Second ALP slot — only meaningful for train types requiring two ALPs
+   * (currently AMRIT_BHARAT). For other trains this is `'NOT_REQUIRED'`.
+   */
+  alp2:
+    | { id: string; name: string }
+    | null
+    | 'NOT_REQUIRED';
   isAssignable: boolean;
   /**
    * The id of the **currently active** assignment for `(trainId, runDate)`,
@@ -518,6 +538,11 @@ export interface TrainWithAssignment extends TrainRow {
    * ALP yet; `'NOT_REQUIRED'` for MEMU/DEMU.
    */
   alp:
+    | { id: string; name: string }
+    | null
+    | 'NOT_REQUIRED';
+  /** Second ALP slot — see `AssignmentRow.alp2`. */
+  alp2:
     | { id: string; name: string }
     | null
     | 'NOT_REQUIRED';
@@ -556,14 +581,14 @@ export interface LeaveRow {
 
 /**
  * Bucket counts that drive the "Hidden: 8 not eligible, 2 on leave,
- * 3 still resting, 1 already assigned" footnote (components.md
- * §`HiddenCrewFootnote`). New buckets sit alongside the originals so the
- * footnote can mention any subset without reshaping the wire payload.
+ * 1 already assigned" footnote (components.md
+ * §`HiddenCrewFootnote`). The 16-hour rest gate is no longer enforced at
+ * assignment time, so resting crew appear in the dropdown grouped under
+ * "Not yet rested" instead of being hidden.
  */
 export interface HiddenCount {
   notEligible: number;
   onLeave: number;
-  resting: number;
   alreadyAssigned: number;
 }
 
@@ -573,6 +598,13 @@ export interface LpSummary {
   name: string;
   /** Server-projected highest-rank drivable type, for an inline mini-badge. */
   grade: TrainType | null;
+  /**
+   * Hours of rest still needed before the candidate satisfies the 16-hour
+   * rule for this run. `0` means already rested. The UI uses this to split
+   * the dropdown into "Rested" vs "Not yet rested" optgroups and to label
+   * each unrested option with the remaining hours.
+   */
+  restHoursRemaining: number;
 }
 export type AlpSummary = LpSummary;
 
@@ -586,7 +618,16 @@ export interface EligibleCrewResponse {
   train: TrainRow;
   loco_pilots: { eligible: LpSummary[]; hidden: HiddenCount };
   assistant_loco_pilots:
-    | { eligible: AlpSummary[]; hidden: HiddenCount }
+    | {
+        eligible: AlpSummary[];
+        hidden: HiddenCount;
+        /**
+         * Number of ALPs the train type requires — 1 for most trains,
+         * 2 for Amrit Bharat. The SPA uses this to decide whether to render
+         * a second ALP dropdown in the AssignCrewModal.
+         */
+        requiredCount: 1 | 2;
+      }
     | null;
 }
 

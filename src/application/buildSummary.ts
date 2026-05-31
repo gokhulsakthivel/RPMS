@@ -10,7 +10,7 @@
 // Assignments are matched by `runDate === D`.
 
 import { hasSufficientRest } from '../domain/hasSufficientRest';
-import { requiresAlp } from '../domain/requiresAlp';
+import { requiredAlpCount } from '../domain/requiresAlp';
 import {
   AssignmentRepo,
   AssistantLocoPilotRepo,
@@ -91,21 +91,27 @@ export async function buildSummary(
 
 /**
  * design.md §9.4: "MEMU/DEMU: counted as unassigned iff there is no LP.
- * Others: iff either LP or ALP is missing." We treat any active assignment
+ * Others: iff either LP or ALP is missing." Amrit Bharat additionally
+ * requires BOTH ALP slots to be filled. We treat any active assignment
  * row for the train as filling its slots — multiple rows on the same train
  * (e.g. a corrected re-assignment) are not expected at this stage.
  */
 function isTrainUnassigned(
   trainType: import('../domain/types').TrainType,
-  assignments: { lpId: string; alpId?: string }[],
+  assignments: { lpId: string; alpId?: string; alpId2?: string }[],
 ): boolean {
   if (assignments.length === 0) return true;
   const hasLp  = assignments.some((a) => a.lpId);
   const hasAlp = assignments.some((a) => a.alpId);
-  if (!requiresAlp(trainType)) {
+  const hasAlp2 = assignments.some((a) => a.alpId2);
+  const alpCount = requiredAlpCount(trainType);
+  if (alpCount === 0) {
     // MEMU/DEMU — only the LP slot is required.
     return !hasLp;
   }
-  // Others — both LP and ALP must be present.
+  if (alpCount === 2) {
+    return !hasLp || !hasAlp || !hasAlp2;
+  }
+  // Single-ALP trains — both LP and ALP must be present.
   return !hasLp || !hasAlp;
 }

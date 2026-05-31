@@ -197,6 +197,10 @@ export function AssignmentsPage() {
         deleting.alp && deleting.alp !== 'NOT_REQUIRED'
           ? deleting.alp.name
           : null,
+      alpName2:
+        deleting.alp2 && deleting.alp2 !== 'NOT_REQUIRED'
+          ? deleting.alp2.name
+          : null,
     });
     setDeleting(null);
   }
@@ -357,6 +361,11 @@ export function AssignmentsPage() {
             ? targetStagedOp.alpId
             : null
         }
+        initialAlpId2={
+          targetStagedOp && targetStagedOp.kind === 'create'
+            ? targetStagedOp.alpId2
+            : null
+        }
         // Hide crew already claimed by drafts on OTHER trains so the
         // operator never offers the same person twice.
         staged={staged}
@@ -380,6 +389,11 @@ export function AssignmentsPage() {
         initialAlpId={
           editingStagedOp && editingStagedOp.kind === 'update'
             ? editingStagedOp.alpId
+            : null
+        }
+        initialAlpId2={
+          editingStagedOp && editingStagedOp.kind === 'update'
+            ? editingStagedOp.alpId2
             : null
         }
         // Hide crew already claimed by drafts on OTHER trains so the

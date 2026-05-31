@@ -152,6 +152,11 @@ export interface Assignment {
   lpId: string;
   /** Absent for MEMU/DEMU. */
   alpId?: string;
+  /**
+   * Second ALP. Only set for train types whose `requiredAlpCount` is 2
+   * (currently AMRIT_BHARAT). MUST be different from `alpId` when set.
+   */
+  alpId2?: string;
   /** UTC, materialized from `train.departureTimeOfDay` + `runDate` at create time. */
   departureTime: Date;
   /**
@@ -173,6 +178,8 @@ export interface Assignment {
    * Always `undefined` when the assignment carries no ALP (MEMU/DEMU).
    */
   previousAlpSignOffTime?: Date;
+  /** Mirror of `previousAlpSignOffTime` for the second ALP slot (Amrit Bharat). */
+  previousAlpSignOffTime2?: Date;
   /** UTC. */
   createdAt: Date;
   /** UTC; undefined for active rows. */
@@ -256,10 +263,16 @@ export interface AssignmentDraft {
   alpId?: string;
   /** Display name; same dual role as `lpName` on `'delete'`. */
   alpName?: string;
+  /** Second ALP pick — only when the train type requires two ALPs (Amrit Bharat). */
+  alpId2?: string;
+  /** Display name for the second ALP — same dual role as `alpName` on `'delete'`. */
+  alpName2?: string;
   /** Snapshot of the previous LP — only set when `kind === 'update'`. */
   originalLpName?: string;
   /** Snapshot of the previous ALP — only set when `kind === 'update'`. */
   originalAlpName?: string;
+  /** Snapshot of the previous second ALP — only set when `kind === 'update'`. */
+  originalAlpName2?: string;
   /** UTC. */
   createdAt: Date;
 }
@@ -276,7 +289,10 @@ export type AssignmentError =
   | { code: 'ALP_REST_VIOLATION'; alpId: string; requiredHours: number; actualHours: number }
   | { code: 'ALP_WINDOW_CONFLICT'; alpId: string; conflictingAssignmentId: string }
   | { code: 'ALP_REQUIRED_BUT_MISSING'; trainType: TrainType }
+  | { code: 'SECOND_ALP_REQUIRED_BUT_MISSING'; trainType: TrainType }
+  | { code: 'ALP_DUPLICATE'; alpId: string }
   | { code: 'ALP_NOT_ALLOWED'; trainType: TrainType }
+  | { code: 'SECOND_ALP_NOT_ALLOWED'; trainType: TrainType }
   | { code: 'ARCHIVED_ENTITY'; entity: 'TRAIN' | 'LP' | 'ALP'; id: string }
   | { code: 'TRAIN_DOES_NOT_RUN_ON_DAY'; trainId: string; runDate: string; dayOfWeek: DayOfWeek }
   | { code: 'ALREADY_ASSIGNED'; trainId: string; runDate: string; conflictingAssignmentId: string }

@@ -43,8 +43,11 @@ const DRAFTS_HEADER = [
   'lpName',
   'alpId',
   'alpName',
+  'alpId2',
+  'alpName2',
   'originalLpName',
   'originalAlpName',
+  'originalAlpName2',
   'createdAt',
 ] as const;
 
@@ -234,10 +237,16 @@ function decodeDraft(row: CsvRow): AssignmentDraft {
   if (alpId) draft.alpId = alpId;
   const alpName = row['alpName'] ?? '';
   if (alpName) draft.alpName = alpName;
+  const alpId2 = row['alpId2'] ?? '';
+  if (alpId2) draft.alpId2 = alpId2;
+  const alpName2 = row['alpName2'] ?? '';
+  if (alpName2) draft.alpName2 = alpName2;
   const originalLpName = row['originalLpName'] ?? '';
   if (originalLpName) draft.originalLpName = originalLpName;
   const originalAlpName = row['originalAlpName'] ?? '';
   if (originalAlpName) draft.originalAlpName = originalAlpName;
+  const originalAlpName2 = row['originalAlpName2'] ?? '';
+  if (originalAlpName2) draft.originalAlpName2 = originalAlpName2;
 
   return draft;
 }
@@ -257,8 +266,11 @@ function encodeDraft(d: AssignmentDraft): CsvRow {
     lpName: d.lpName ?? '',
     alpId: d.alpId ?? '',
     alpName: d.alpName ?? '',
+    alpId2: d.alpId2 ?? '',
+    alpName2: d.alpName2 ?? '',
     originalLpName: d.originalLpName ?? '',
     originalAlpName: d.originalAlpName ?? '',
+    originalAlpName2: d.originalAlpName2 ?? '',
     createdAt: encodeDate(d.createdAt),
   };
 }
