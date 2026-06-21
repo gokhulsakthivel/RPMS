@@ -27,12 +27,19 @@ import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { Column, DataTable } from '../data/DataTable';
 import { TrainTypeBadge } from '../trains/TrainTypeBadge';
+import type { LinkContext } from './linkContext';
 import type { StagedOp } from './stagedAssignments';
 
 export interface AssignmentTableProps {
   rows: ReadonlyArray<AssignmentRow>;
   /** Map keyed by `trainId` — the page-level draft cart. */
   staged: ReadonlyMap<string, StagedOp>;
+  /**
+   * Map keyed by `trainNumber` — optional row-level link metadata for the
+   * Train cell (link name, position, previous-day outward pair). Omit or
+   * pass an empty map to render the table with no hint sub-line.
+   */
+  linkContextByTrainNumber?: ReadonlyMap<string, LinkContext>;
   onAssign: (row: AssignmentRow) => void;
   /** Opens the EditAssignmentModal for an existing active assignment. */
   onEdit: (row: AssignmentRow) => void;
@@ -46,6 +53,7 @@ export interface AssignmentTableProps {
 export function AssignmentTable({
   rows,
   staged,
+  linkContextByTrainNumber,
   onAssign,
   onEdit,
   onDelete,
@@ -56,12 +64,16 @@ export function AssignmentTable({
     {
       key: 'train',
       header: 'Train',
-      cell: (r) => (
-        <div className="assign-table__train">
-          <span className="assign-table__num">{r.trainNumber}</span>
-          <span className="assign-table__name">{r.trainName}</span>
-        </div>
-      ),
+      cell: (r) => {
+        const ctx = linkContextByTrainNumber?.get(r.trainNumber);
+        return (
+          <div className="assign-table__train">
+            <span className="assign-table__num">{r.trainNumber}</span>
+            <span className="assign-table__name">{r.trainName}</span>
+            {ctx ? <LinkHint ctx={ctx} /> : null}
+          </div>
+        );
+      },
     },
     {
       key: 'type',
@@ -285,4 +297,54 @@ function renderCrewCell(
   return (
     <span className="assign-table__crew">{stagedName}</span>
   );
+}
+
+// ---------------------------------------------------------------------------
+// LinkHint — sub-line under the train number/name surfacing the depot
+// link/position context. When the train is an overnight return run we
+// also surface the previous-day outward leg so the operator can see why
+// the suggested crew is who they are (see `linkContext.ts`).
+// ---------------------------------------------------------------------------
+
+function LinkHint({ ctx }: { ctx: LinkContext }): React.ReactElement {
+  const seg = ctx.matchedSegment;
+  const route =
+    seg.fromStation && seg.toStation ? (
+      <>
+        <span className={stationClass(seg.fromStation)}>{seg.fromStation}</span>
+        {'→'}
+        <span className={stationClass(seg.toStation)}>{seg.toStation}</span>
+      </>
+    ) : null;
+  const dirBadge = seg.direction ? (
+    <span
+      className={`assign-table__dir assign-table__dir--${seg.direction}`}
+      title={
+        seg.direction === 'outward'
+          ? 'Depot-leaving leg'
+          : seg.direction === 'inward'
+            ? 'Depot-arriving leg'
+            : 'Mid-trip continuation'
+      }
+    >
+      {seg.direction}
+    </span>
+  ) : null;
+  // Inward-pair overnight hint intentionally hidden — pair context is
+  // still computed upstream so suggestion pre-fill keeps working.
+  return (
+    <div className="assign-table__link-hint">
+      <span className="assign-table__link-hint-pos">
+        {ctx.linkName} · pos {ctx.positionNumber}
+        {route ? <> · {route}</> : null}
+        {dirBadge}
+      </span>
+    </div>
+  );
+}
+
+/** CSS class derived from the station code — drives the color palette. */
+function stationClass(code: string): string {
+  const safe = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `station-chip station-chip--${safe}`;
 }

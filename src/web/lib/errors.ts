@@ -48,6 +48,12 @@ export function describeApiError(error: ApiError): string {
       return `This LP is on ${formatLeaveType(context['leaveType'])} from ${formatDate(context['fromDate'])} to ${formatDate(context['toDate'])}.`;
     case 'ALP_ON_LEAVE':
       return `This ALP is on ${formatLeaveType(context['leaveType'])} from ${formatDate(context['fromDate'])} to ${formatDate(context['toDate'])}.`;
+    case 'CREW_NOT_ELIGIBLE_FOR_LINK': {
+      const missing = Array.isArray(context['missingTypes']) ? context['missingTypes'] : [];
+      const types = missing.map((t) => formatTrainType(t)).join(', ');
+      const link = typeof context['linkName'] === 'string' ? context['linkName'] : 'this link';
+      return `This crew member isn't certified for ${types || 'a train type'} that ${link} covers.`;
+    }
 
     // ---------------- API/HTTP layer ----------------
     case 'NOT_FOUND':

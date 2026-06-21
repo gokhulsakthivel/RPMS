@@ -28,6 +28,15 @@ const MIN_REST_HOURS = 16;
 // Update only here when policy changes.
 ```
 
+### 1.3 Link Enums
+```ts
+enum LinkPositionKind {
+  DUTY = 'DUTY',  // one tour of duty (1+ segments chained as one continuous tour)
+  OFF  = 'OFF',   // single off day
+  PR   = 'PR',    // periodic rest block
+}
+```
+
 ## 2. Domain Model
 
 ```ts
@@ -84,6 +93,68 @@ interface Assignment {
 - `Train.inwardArrivalTime > Train.departureTime`. Reject the row otherwise.
 - `Train.number` is **unique** across all (active and archived) train rows. Reject duplicate-number rows on load.
 - `archivedAt` is either absent or a valid UTC timestamp ≥ the row's `createdAt` (where applicable).
+
+### 2.1 Link Domain Model
+
+```ts
+type CrewRole = 'LP' | 'ALP';
+
+interface LinkSegment {
+  /** Train number — joined to `Train.number` (the stable, unique identifier). */
+  trainNumber: string;
+  /** IST `HH:MM` (24h) — sign-on at the start of this segment. */
+  signOnTimeOfDay: string;
+  /** IST `HH:MM` (24h) — sign-off at the end of this segment. */
+  signOffTimeOfDay: string;
+  /** 0 = same IST day as the position's run date, 1 = next day, ... */
+  signOffDayOffset: number;
+}
+
+type LinkPosition =
+  | { positionNumber: number; kind: 'DUTY'; segments: LinkSegment[] }   // segments.length >= 1
+  | { positionNumber: number; kind: 'OFF' }
+  | { positionNumber: number; kind: 'PR'  };
+
+interface Link {
+  id: string;                         // PK, prefix `LNK_`
+  name: string;                       // e.g., "CBE MAIL LINK - 19 MEN"
+  crewRole: CrewRole;
+  /** Optional role label — only meaningful when `crewRole === 'LP'`. */
+  lpCategory?: LpCategory;
+  /** Number of positions in the cycle. MUST equal `positions.length`. */
+  cycleLength: number;
+  /** Ordered list — `positions[i].positionNumber` MUST equal `i + 1`. */
+  positions: LinkPosition[];
+  createdAt: Date;                    // UTC
+  archivedAt?: Date;                  // UTC; undefined for active rows
+}
+
+interface LinkMembership {
+  id: string;                         // PK, prefix `LMB_`
+  linkId: string;                     // FK → Link.id
+  crewId: string;                     // FK → LP.id or ALP.id (matches crewRole)
+  crewRole: CrewRole;                 // MUST equal parent Link.crewRole
+  /** IST calendar date `YYYY-MM-DD` at which `anchorPositionNumber` applies. */
+  anchorDate: string;
+  /** 1-based position the crew member sits at on `anchorDate`. */
+  anchorPositionNumber: number;
+  createdAt: Date;                    // UTC
+  archivedAt?: Date;                  // UTC; undefined for active rows
+}
+```
+
+**Loader-enforced invariants for Link:**
+- `cycleLength >= 1` and `positions.length === cycleLength`.
+- `positions[i].positionNumber === i + 1` for every position.
+- Every `DUTY` position has at least one segment.
+- Every segment has a non-empty `trainNumber` and `HH:MM` time strings.
+- `signOffDayOffset` is an integer in `[0..3]`.
+- `lpCategory` is set **only** when `crewRole === 'LP'`.
+
+**Loader-enforced invariants for LinkMembership:**
+- `crewRole` matches the parent Link's `crewRole`.
+- `anchorPositionNumber` is in `[1..cycleLength]`.
+- `anchorDate` is a valid `YYYY-MM-DD`.
 
 ## 3. Validation Functions
 
@@ -176,6 +247,37 @@ function assignCrew(input: {
 
 > The operator may **manually override** `lastSignOffTime` via the Edit Crew flow ([HLD §4.7](./HLD.md#47-sign-off-time-maintenance)). That path goes through the repo's `update(id, patch)` and is **not** part of `assignCrew`.
 
+### 3.7 Link Position Resolution
+
+Pure helper (no I/O, no `Date.now()`):
+
+```ts
+function positionOnDate(
+  link: { cycleLength: number },
+  membership: { anchorDate: string; anchorPositionNumber: number },
+  runDate: string,            // IST 'YYYY-MM-DD'
+): number {
+  // 1. Compute integer-day delta between runDate and anchorDate (IST).
+  // 2. positionOnDate = ((anchorPositionNumber - 1 + delta) mod cycleLength) + 1
+  //    — with the caveat that JS '%' is sign-preserving; use a safe mod.
+  // Returns a 1-based position number in [1..cycleLength].
+}
+```
+
+The helper's `runDate` may be **before** the anchor — `delta` is allowed to be negative. The implementation MUST use a sign-safe modulo so a runDate one day before anchor on a 19-position link returns position 19 (not -1). The companion helper:
+
+```ts
+function resolvePositionForRun(
+  link: Link,
+  membership: LinkMembership,
+  runDate: string,
+): { positionNumber: number; position: LinkPosition };
+```
+
+returns the resolved `LinkPosition` itself for callers that need to inspect the segments.
+
+> §4.11 — **Auto-Draft only.** The link-aware rest exception is implemented at the auto-draft caller, never inside `hasSufficientRest`. `MIN_REST_HOURS` does not move.
+
 ## 4. Error Contract
 
 Errors are **structured** so the UI can render actionable messages. Never throw raw strings.
@@ -198,6 +300,25 @@ type AssignmentError =
 - `LP_WINDOW_CONFLICT` / `ALP_WINDOW_CONFLICT` cover the no-double-booking rule ([HLD §4.6](./HLD.md#46-window-overlap-rule-no-double-booking)).
 - `ARCHIVED_ENTITY` is raised when `assignCrew` is called against any archived row.
 
+### 4.1 Link Validation Errors
+
+Phase-1-only — these surface from `POST /api/links` and `POST /api/link-memberships`. They are **not** part of the assignment orchestrator's error union:
+
+```ts
+type LinkValidationError =
+  | { code: 'LINK_INVALID_CYCLE_LENGTH'; received: number }
+  | { code: 'LINK_POSITION_COUNT_MISMATCH'; cycleLength: number; received: number }
+  | { code: 'LINK_POSITION_NUMBER_MISMATCH'; expected: number; received: number; index: number }
+  | { code: 'LINK_DUTY_NEEDS_SEGMENT'; positionNumber: number }
+  | { code: 'LINK_LP_CATEGORY_FOR_ALP' }
+  | { code: 'LINK_MEMBERSHIP_ROLE_MISMATCH'; expected: CrewRole; received: CrewRole }
+  | { code: 'LINK_MEMBERSHIP_POSITION_OUT_OF_RANGE'; cycleLength: number; received: number }
+  | { code: 'LINK_NOT_FOUND'; linkId: string }
+  | { code: 'LINK_CREW_NOT_FOUND'; crewId: string; crewRole: CrewRole };
+```
+
+These codes are mostly defence-in-depth — the Zod schemas in `src/shared/schemas.ts` reject the same inputs at the route boundary first.
+
 ## 5. Persistence
 
 CSV-backed and **repo-local**. The four files under `data/` are the system of record. There is no database.
@@ -208,7 +329,11 @@ data/
 ├── trains.csv
 ├── loco_pilots.csv
 ├── assistant_loco_pilots.csv
-└── assignments.csv
+├── assignments.csv
+├── leaves.csv
+├── assignment_drafts.csv
+├── links.csv
+└── link_memberships.csv
 ```
 
 ### 5.2 File Format Rules
@@ -218,7 +343,7 @@ data/
 - **Empty string** = `undefined`/null.
 - **Lists** (e.g., `eligibleTrainTypes`) are pipe-delimited within a single field: `MEMU|VANDE_BHARAT`. Empty cell = empty list.
 - **Header row is mandatory** and is part of the contract — readers must assert exact match on load.
-- **ID prefixes:** `TRN_`, `LP_`, `ALP_`, `ASN_`. IDs are opaque strings; any uniqueness scheme is acceptable.
+- **ID prefixes:** `TRN_`, `LP_`, `ALP_`, `ASN_`, `LEAVE_`, `LNK_`, `LMB_`. IDs are opaque strings; any uniqueness scheme is acceptable.
 
 ### 5.3 Schemas
 
@@ -283,6 +408,38 @@ id,trainId,lpId,alpId,departureTime,signOffTime,createdAt,archivedAt
 | `createdAt`     | ISO-UTC  | When the row was persisted |
 | `archivedAt`    | ISO-UTC  | Empty for active rows |
 
+#### `links.csv`
+```
+id,name,crewRole,lpCategory,cycleLength,positions,createdAt,archivedAt
+```
+| Column         | Type     | Notes |
+|----------------|----------|-------|
+| `id`           | string   | PK, prefix `LNK_` |
+| `name`         | string   | e.g., `CBE MAIL LINK - 19 MEN` |
+| `crewRole`     | enum     | `LP` or `ALP` |
+| `lpCategory`   | enum     | Optional. Only set when `crewRole = LP`. Empty otherwise. |
+| `cycleLength`  | integer  | ≥ 1; MUST equal `positions.length` |
+| `positions`    | JSON     | UTF-8 JSON array of `LinkPosition` (escaped per RFC 4180). See §2.1. |
+| `createdAt`    | ISO-UTC  | |
+| `archivedAt`   | ISO-UTC  | Empty for active rows |
+
+> **Why JSON-in-CSV for `positions`?** A link's positions form an irregular, deeply-nested structure (DUTY may have 1–8 segments; OFF/PR carry no segments). A separate `link_positions.csv` would force a join on every read for very little gain — there is one Link per several thousand assignments, and writes go through a single repo. RFC 4180 quoting handles JSON correctly via the existing `csvIo` helpers; we never parse this column outside the repo.
+
+#### `link_memberships.csv`
+```
+id,linkId,crewId,crewRole,anchorDate,anchorPositionNumber,createdAt,archivedAt
+```
+| Column                 | Type     | Notes |
+|------------------------|----------|-------|
+| `id`                   | string   | PK, prefix `LMB_` |
+| `linkId`               | FK       | → `links.id` |
+| `crewId`               | FK       | → `loco_pilots.id` or `assistant_loco_pilots.id` (per `crewRole`) |
+| `crewRole`             | enum     | `LP` or `ALP`. MUST equal parent Link's `crewRole`. |
+| `anchorDate`           | YYYY-MM-DD | IST calendar date the anchor position applies to |
+| `anchorPositionNumber` | integer  | 1-based, ≤ parent Link's `cycleLength` |
+| `createdAt`            | ISO-UTC  | |
+| `archivedAt`           | ISO-UTC  | Empty for active rows |
+
 ### 5.4 Write Discipline
 - **Whole-file rewrite.** Any update — including `lastSignOffTime` mutations and new assignment rows — rewrites the entire file.
 - **Atomic write.** Write to `<file>.tmp`, then `rename()` over the original. Prevents half-written files on crash.
@@ -329,6 +486,24 @@ interface AssignmentRepo {
   list(opts?: ActiveFilter & { departingWithin?: DateRange }): Promise<Assignment[]>;
   listByCrew(crewId: string, opts?: ActiveFilter): Promise<Assignment[]>;
   listByTrain(trainId: string, opts?: ActiveFilter): Promise<Assignment[]>;
+  archive(id: string): Promise<void>;
+}
+
+interface LinkRepo {
+  findById(id: string, opts?: ActiveFilter): Promise<Link | null>;
+  list(opts?: ActiveFilter): Promise<Link[]>;
+  create(input: Omit<Link, 'id' | 'createdAt' | 'archivedAt'>): Promise<Link>;
+  update(id: string, patch: Partial<Omit<Link, 'id' | 'createdAt'>>): Promise<Link>;
+  archive(id: string): Promise<void>;
+}
+
+interface LinkMembershipRepo {
+  findById(id: string, opts?: ActiveFilter): Promise<LinkMembership | null>;
+  list(opts?: ActiveFilter): Promise<LinkMembership[]>;
+  listByLink(linkId: string, opts?: ActiveFilter): Promise<LinkMembership[]>;
+  listByCrew(crewId: string, opts?: ActiveFilter): Promise<LinkMembership[]>;
+  create(input: Omit<LinkMembership, 'id' | 'createdAt' | 'archivedAt'>): Promise<LinkMembership>;
+  update(id: string, patch: Partial<Omit<LinkMembership, 'id' | 'createdAt'>>): Promise<LinkMembership>;
   archive(id: string): Promise<void>;
 }
 ```

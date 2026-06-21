@@ -36,6 +36,7 @@ import { FormField } from '../primitives/FormField';
 import { TrainTypeBadge } from '../trains/TrainTypeBadge';
 import { EligibleCrewSelect } from './EligibleCrewSelect';
 import { HiddenCrewFootnote } from './HiddenCrewFootnote';
+import type { LinkSuggestion } from './linkSuggestions';
 import {
   type StagedOp,
   type StagedUpdate,
@@ -58,6 +59,13 @@ export interface EditAssignmentModalProps {
    * re-opening Edit on a draft row keeps that draft's picks visible.
    */
   staged?: ReadonlyMap<string, StagedOp>;
+  /**
+   * Phase 4 — Link-derived suggestion for this train + runDate. The Edit
+   * modal does NOT auto-apply (the operator's intent is to mutate an
+   * already-persisted assignment); instead the modal shows a banner with
+   * an "Apply" action when the suggestion differs from the current pick.
+   */
+  linkSuggestion?: LinkSuggestion | null;
   onClose: () => void;
   /**
    * Called when the operator clicks Save with a non-empty diff. Emits an
@@ -73,6 +81,7 @@ export function EditAssignmentModal({
   initialAlpId,
   initialAlpId2,
   staged,
+  linkSuggestion = null,
   onClose,
   onStage,
 }: EditAssignmentModalProps) {
@@ -277,6 +286,29 @@ export function EditAssignmentModal({
     target && target.alp2 !== 'NOT_REQUIRED' ? target.alp2 : null,
   );
 
+  // Phase 4 — surface the link suggestion only when it materially differs
+  // from the buffered picks AND each suggested crew is in the eligible list.
+  // The Edit modal never auto-applies; the operator clicks "Apply suggestion".
+  const lpSuggestionApplicable =
+    linkSuggestion?.lp &&
+    linkSuggestion.lp.id !== lpId &&
+    lpOptions.some((o) => o.id === linkSuggestion.lp!.id)
+      ? linkSuggestion.lp
+      : null;
+  const alpSuggestionApplicable =
+    linkSuggestion?.alp &&
+    eligible?.assistant_loco_pilots &&
+    linkSuggestion.alp.id !== alpId &&
+    alpOptions.some((o) => o.id === linkSuggestion.alp!.id)
+      ? linkSuggestion.alp
+      : null;
+  const hasApplicableSuggestion =
+    !!lpSuggestionApplicable || !!alpSuggestionApplicable;
+  function applyLinkSuggestion() {
+    if (lpSuggestionApplicable) setLpId(lpSuggestionApplicable.id);
+    if (alpSuggestionApplicable) setAlpId(alpSuggestionApplicable.id);
+  }
+
   return (
     <Modal
       open={target !== null && target.assignmentId !== null}
@@ -319,6 +351,31 @@ export function EditAssignmentModal({
       {serverError ? (
         <Banner tone="error" title="Couldn't update assignment">
           {serverError}
+        </Banner>
+      ) : null}
+
+      {!serverError && !loading && eligible && hasApplicableSuggestion ? (
+        <Banner tone="info" title="Link roster suggests">
+          <div className="assign-modal__suggestion">
+            <span>
+              {[
+                lpSuggestionApplicable
+                  ? `LP ${lpSuggestionApplicable.name} (${lpSuggestionApplicable.linkName})`
+                  : null,
+                alpSuggestionApplicable
+                  ? `ALP ${alpSuggestionApplicable.name} (${alpSuggestionApplicable.linkName})`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+            <Button
+              variant="secondary"
+              onClick={applyLinkSuggestion}
+            >
+              Apply suggestion
+            </Button>
+          </div>
         </Banner>
       ) : null}
 

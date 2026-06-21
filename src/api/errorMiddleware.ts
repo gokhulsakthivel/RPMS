@@ -46,7 +46,7 @@ export function sendRuleError(res: Response, error: AssignmentError): Response {
  */
 export class NotFoundError extends Error {
   constructor(
-    readonly entity: 'TRAIN' | 'LP' | 'ALP' | 'ASSIGNMENT' | 'LEAVE',
+    readonly entity: 'TRAIN' | 'LP' | 'ALP' | 'ASSIGNMENT' | 'LEAVE' | 'LINK' | 'LINK_MEMBERSHIP',
     readonly entityId: string,
   ) {
     super(`${entity} not found: ${entityId}`);
@@ -66,6 +66,22 @@ export class ConflictError extends Error {
   ) {
     super(`Conflict: ${code}`);
     this.name = 'ConflictError';
+  }
+}
+
+/**
+ * Thrown for input the routers reject before delegating to the orchestrator
+ * when the request is structurally valid (Zod-passing) but semantically wrong
+ * — e.g. cross-field referential mismatches like `crewRole` not matching the
+ * referenced link's `crewRole`. HTTP 400.
+ */
+export class BadRequestError extends Error {
+  constructor(
+    message: string,
+    readonly context: Record<string, unknown> = {},
+  ) {
+    super(message);
+    this.name = 'BadRequestError';
   }
 }
 
@@ -146,6 +162,16 @@ export function errorMiddleware(
   if (err instanceof ConflictError) {
     const body: ApiErrorResponse = { code: err.code, ...err.context };
     res.status(409).json(body);
+    return;
+  }
+
+  if (err instanceof BadRequestError) {
+    const body: ApiErrorResponse = {
+      code: 'BAD_REQUEST',
+      message: err.message,
+      ...err.context,
+    };
+    res.status(400).json(body);
     return;
   }
 

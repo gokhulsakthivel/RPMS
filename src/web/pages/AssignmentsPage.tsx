@@ -26,18 +26,33 @@ import {
   ApiError,
   assignmentDrafts as assignmentDraftsApi,
   assignments as assignmentsApi,
+  links as linksApi,
+  prAssignments as prAssignmentsApi,
 } from '../lib/api';
 import { describeApiError } from '../lib/errors';
 import { useSelectedDate } from '../lib/useSelectedDate';
 import type {
   AssignmentDraftRow,
   AssignmentRow,
+  LinkProjectionRow,
+  LinkRow,
+  PrAssignmentRow,
 } from '../../shared/schemas';
 import { PageHeader } from '../components/PageHeader';
 import { refreshSummary } from '../components/chrome/SummaryCards';
 import { AssignCrewModal } from '../components/assignments/AssignCrewModal';
 import { AssignmentTable } from '../components/assignments/AssignmentTable';
 import { EditAssignmentModal } from '../components/assignments/EditAssignmentModal';
+import { EditPrAssignmentModal } from '../components/assignments/EditPrAssignmentModal';
+import { PrAssignmentTable } from '../components/assignments/PrAssignmentTable';
+import {
+  buildSuggestionByTrainNumber,
+  type LinkSuggestion,
+} from '../components/assignments/linkSuggestions';
+import {
+  buildLinkContextByTrainNumber,
+  type LinkContext,
+} from '../components/assignments/linkContext';
 import type { StagedOp } from '../components/assignments/stagedAssignments';
 import { Banner } from '../components/feedback/Banner';
 import { EmptyState } from '../components/feedback/EmptyState';
@@ -65,6 +80,28 @@ export function AssignmentsPage() {
   const [drafts, setDrafts] = useState<AssignmentDraftRow[] | null>(null);
   const [draftTick, setDraftTick] = useState(0);
   const [committing, setCommitting] = useState(false);
+  const [autoDrafting, setAutoDrafting] = useState(false);
+
+  // Phase 4 — link projection for the selected date, used to derive
+  // pre-fill suggestions for AssignCrewModal / EditAssignmentModal. Loaded
+  // best-effort: a fetch failure simply means "no suggestions today".
+  const [projection, setProjection] = useState<LinkProjectionRow[] | null>(
+    null,
+  );
+
+  // Full link records (with positions arrays) — used by the Plan-table
+  // hint to walk to position N-1 of the same link and surface the
+  // previous-day outward leg when a train is an overnight return run.
+  // Best-effort: a failure simply means no "↩ from…" badges.
+  const [links, setLinks] = useState<LinkRow[] | null>(null);
+
+  // Previous-day assignments — needed by both `linkContext` (to print
+  // the outward leg's actual crew names) and `linkSuggestions` (to
+  // pre-fill the modal for INWARD trains from the paired outward's
+  // already-committed assignment instead of the rotation guess).
+  const [prevDayAssignments, setPrevDayAssignments] = useState<
+    AssignmentRow[] | null
+  >(null);
 
   const refetch = useCallback(() => setTick((n) => n + 1), []);
   const refetchDrafts = useCallback(() => setDraftTick((n) => n + 1), []);
@@ -125,6 +162,122 @@ export function AssignmentsPage() {
       cancelled = true;
     };
   }, [selectedDate, draftTick]);
+
+  // Phase 4 — best-effort projection fetch. Suggestions are a nice-to-have:
+  // a failure (or empty result) just means the modals get no pre-fill.
+  useEffect(() => {
+    let cancelled = false;
+    setProjection(null);
+    linksApi
+      .projection(selectedDate)
+      .then((data) => {
+        if (!cancelled) setProjection(data);
+      })
+      .catch(() => {
+        if (!cancelled) setProjection([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
+
+  // Full link list — re-used by the Plan-table row hint. Doesn't change
+  // with the selected date, but we re-fetch on date change to stay in
+  // step with any links the operator added between renders.
+  useEffect(() => {
+    let cancelled = false;
+    linksApi
+      .list()
+      .then((data) => {
+        if (!cancelled) setLinks(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLinks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
+
+  // Previous-day assignments — best-effort fetch.
+  useEffect(() => {
+    let cancelled = false;
+    setPrevDayAssignments(null);
+    const prev = previousIsoDate(selectedDate);
+    assignmentsApi
+      .list(prev)
+      .then((data) => {
+        if (!cancelled) setPrevDayAssignments(data);
+      })
+      .catch(() => {
+        if (!cancelled) setPrevDayAssignments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
+
+  // PR slots for the selected date — best-effort. Direct-save (no draft cart).
+  const [prRows, setPrRows] = useState<PrAssignmentRow[] | null>(null);
+  const [prTick, setPrTick] = useState(0);
+  const [editingPr, setEditingPr] = useState<PrAssignmentRow | null>(null);
+  const refetchPr = useCallback(() => setPrTick((n) => n + 1), []);
+  useEffect(() => {
+    let cancelled = false;
+    setPrRows(null);
+    prAssignmentsApi
+      .list(selectedDate)
+      .then((data) => {
+        if (!cancelled) setPrRows(data);
+      })
+      .catch(() => {
+        if (!cancelled) setPrRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate, prTick]);
+
+  // trainNumber → AssignmentRow for the selected date (same-day) and the
+  // day before. These power the inward→outward chain in both the modal
+  // pre-fill and the row hint.
+  const sameDayAssignmentsByTrain = useMemo<ReadonlyMap<string, AssignmentRow>>(() => {
+    const m = new Map<string, AssignmentRow>();
+    for (const a of rows ?? []) m.set(a.trainNumber, a);
+    return m;
+  }, [rows]);
+
+  const prevDayAssignmentsByTrain = useMemo<ReadonlyMap<string, AssignmentRow>>(() => {
+    const m = new Map<string, AssignmentRow>();
+    for (const a of prevDayAssignments ?? []) m.set(a.trainNumber, a);
+    return m;
+  }, [prevDayAssignments]);
+
+  const linksById = useMemo<ReadonlyMap<string, LinkRow>>(
+    () => new Map((links ?? []).map((l) => [l.id, l] as const)),
+    [links],
+  );
+
+  const suggestionByTrainNumber = useMemo<
+    ReadonlyMap<string, LinkSuggestion>
+  >(() => {
+    if (!projection) return new Map();
+    return buildSuggestionByTrainNumber(projection, {
+      linksById,
+      sameDayAssignmentsByTrain,
+      prevDayAssignmentsByTrain,
+    });
+  }, [projection, linksById, sameDayAssignmentsByTrain, prevDayAssignmentsByTrain]);
+
+  const linkContextByTrainNumber = useMemo<
+    ReadonlyMap<string, LinkContext>
+  >(() => {
+    if (!projection || !links) return new Map();
+    return buildLinkContextByTrainNumber(projection, linksById, selectedDate, {
+      sameDayAssignmentsByTrain,
+      prevDayAssignmentsByTrain,
+    });
+  }, [projection, links, linksById, selectedDate, sameDayAssignmentsByTrain, prevDayAssignmentsByTrain]);
 
   // -------------------------------------------------------------------------
   // Derived: Map<trainId, StagedOp> — what the table + modals consume.
@@ -266,6 +419,69 @@ export function AssignmentsPage() {
   }
 
   // -------------------------------------------------------------------------
+  // Auto-Draft — stage one draft per train running today from active links
+  // (HLD §4.12 / Phase 3). The server skips trains that already have an
+  // assignment or a draft; the toast summarises matched vs skipped counts.
+  // -------------------------------------------------------------------------
+  async function autoDraft() {
+    setAutoDrafting(true);
+    try {
+      const { matched, skipped } = await assignmentDraftsApi.auto(selectedDate);
+      refetchDrafts();
+
+      // Surface per-train skip reasons so operators can see exactly why
+      // a train was missed (NO_LINK_FOR_TRAIN, NO_LP_MEMBER_AT_POSITION,
+      // LP_ON_LEAVE, etc.). Grouped log keeps the console scannable.
+      const groups = new Map<string, Array<{ trainNumber: string; detail: unknown }>>();
+      for (const s of skipped) {
+        const code = s.reason.code;
+        const detail: Record<string, unknown> = { ...s.reason };
+        delete detail['code'];
+        const bucket = groups.get(code) ?? [];
+        bucket.push({ trainNumber: s.trainNumber, detail });
+        groups.set(code, bucket);
+      }
+      // eslint-disable-next-line no-console
+      console.groupCollapsed(
+        `[AutoDraft] ${selectedDate} — staged ${matched.length}, skipped ${skipped.length}`,
+      );
+      // eslint-disable-next-line no-console
+      console.info('matched', matched);
+      for (const [code, rows] of groups) {
+        // eslint-disable-next-line no-console
+        console.info(`skipped · ${code} (${rows.length})`, rows);
+      }
+      // eslint-disable-next-line no-console
+      console.groupEnd();
+
+      if (matched.length === 0 && skipped.length === 0) {
+        toast.info('No trains running on this date.');
+      } else if (matched.length === 0) {
+        toast.info(
+          `Auto-Draft staged nothing (${skipped.length} skipped — see console).`,
+        );
+      } else {
+        const breakdown = Array.from(groups)
+          .map(([code, rows]) => `${rows.length} ${code}`)
+          .join(', ');
+        toast.success(
+          `Auto-Drafted ${matched.length} train${matched.length === 1 ? '' : 's'}${
+            skipped.length > 0 ? ` · ${skipped.length} skipped (${breakdown})` : ''
+          }`,
+        );
+      }
+    } catch (e) {
+      toast.error(
+        `Auto-Draft failed — ${
+          e instanceof ApiError ? describeApiError(e) : (e as Error).message
+        }`,
+      );
+    } finally {
+      setAutoDrafting(false);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Pre-fill values when re-opening a modal on a row that already has a
   // staged op — keeps Edit-the-draft seamless.
   // -------------------------------------------------------------------------
@@ -286,6 +502,14 @@ export function AssignmentsPage() {
         subtitle={`Trains departing on ${selectedDate}.`}
         action={
           <div className="page-header__actions">
+            <Button
+              variant="secondary"
+              onClick={autoDraft}
+              disabled={committing || autoDrafting}
+              title="Stage a draft for every train running today, sourced from active links."
+            >
+              {autoDrafting ? 'Auto-Drafting…' : 'Auto-Draft from links'}
+            </Button>
             <Button
               variant="text"
               onClick={resetDraft}
@@ -338,6 +562,7 @@ export function AssignmentsPage() {
         <AssignmentTable
           rows={rows}
           staged={staged}
+          linkContextByTrainNumber={linkContextByTrainNumber}
           onAssign={setTarget}
           onEdit={setEditing}
           onDelete={setDeleting}
@@ -346,6 +571,27 @@ export function AssignmentsPage() {
           }}
         />
       ) : null}
+
+      {prRows && prRows.length > 0 ? (
+        <section className="assignments__pr-section">
+          <h3 className="assignments__pr-heading">Periodic Rest</h3>
+          <p className="assignments__pr-sub">
+            Default crew comes from the link rotation. Override per day if
+            someone else is taking the PR slot, or clear it for the day.
+          </p>
+          <PrAssignmentTable rows={prRows} onEdit={setEditingPr} />
+        </section>
+      ) : null}
+
+      <EditPrAssignmentModal
+        target={editingPr}
+        runDate={selectedDate}
+        onClose={() => setEditingPr(null)}
+        onSaved={() => {
+          refetchPr();
+          toast.success('PR updated');
+        }}
+      />
 
       <AssignCrewModal
         target={target}
@@ -369,6 +615,9 @@ export function AssignmentsPage() {
         // Hide crew already claimed by drafts on OTHER trains so the
         // operator never offers the same person twice.
         staged={staged}
+        linkSuggestion={
+          target ? suggestionByTrainNumber.get(target.trainNumber) ?? null : null
+        }
         onClose={() => setTarget(null)}
         onStage={(op) => {
           void stageOp(op).then(() => {
@@ -399,6 +648,11 @@ export function AssignmentsPage() {
         // Hide crew already claimed by drafts on OTHER trains so the
         // operator never offers the same person twice.
         staged={staged}
+        linkSuggestion={
+          editing
+            ? suggestionByTrainNumber.get(editing.trainNumber) ?? null
+            : null
+        }
         onClose={() => setEditing(null)}
         onStage={(op) => {
           void stageOp(op).then(() => {
@@ -426,4 +680,17 @@ export function AssignmentsPage() {
 
     </>
   );
+}
+
+/** `YYYY-MM-DD` (IST) minus one day. Pure: parses via `Date.UTC`. */
+function previousIsoDate(iso: string): string {
+  const y = Number(iso.slice(0, 4));
+  const m = Number(iso.slice(5, 7));
+  const d = Number(iso.slice(8, 10));
+  const ms = Date.UTC(y, m - 1, d) - 86400000;
+  const dt = new Date(ms);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
 }

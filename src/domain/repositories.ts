@@ -9,7 +9,10 @@ import {
   AssistantLocoPilot,
   CrewRole,
   Leave,
+  Link,
+  LinkMembership,
   LocoPilot,
+  PrAssignment,
   Train,
 } from './types';
 
@@ -142,4 +145,58 @@ export interface AssignmentDraftRepo {
   deleteByTrainAndDate(trainId: string, runDate: string): Promise<boolean>;
   /** Hard-delete every draft for an IST run-date. Returns the count removed. */
   deleteAllForDate(runDate: string): Promise<number>;
+}
+
+// ---------------------------------------------------------------------------
+// Links — predefined duty rotations (LLD §5.5).
+// ---------------------------------------------------------------------------
+
+/**
+ * Repository for `Link` rows. Reads return the full `Link` (positions
+ * decoded from the JSON-in-CSV column). Updates re-validate the cycle on
+ * write.
+ */
+export interface LinkRepo {
+  findById(id: string, opts?: ActiveFilter): Promise<Link | null>;
+  list(opts?: ActiveFilter & { crewRole?: CrewRole }): Promise<Link[]>;
+  create(input: Omit<Link, 'id' | 'createdAt' | 'archivedAt'>): Promise<Link>;
+  update(id: string, patch: Partial<Omit<Link, 'id' | 'createdAt'>>): Promise<Link>;
+  archive(id: string): Promise<void>;
+}
+
+/**
+ * Repository for `LinkMembership` rows. Phase-1 callers mostly want
+ * `listByLink(linkId)` (Memberships panel) and `findActiveByCrew(crewId)`
+ * (single-crew schedule lookup, Phase 3). The caller — never the repo —
+ * is responsible for cross-validating that `crewRole` matches the parent
+ * link's `crewRole`.
+ */
+export interface LinkMembershipRepo {
+  findById(id: string, opts?: ActiveFilter): Promise<LinkMembership | null>;
+  list(opts?: ActiveFilter): Promise<LinkMembership[]>;
+  listByLink(linkId: string, opts?: ActiveFilter): Promise<LinkMembership[]>;
+  /**
+   * Returns the active (non-archived) membership for one crew member, or
+   * `null` if they are not on any link. A crew member may belong to at
+   * most one active link at a time — the API enforces this on create.
+   */
+  findActiveByCrew(crewId: string): Promise<LinkMembership | null>;
+  create(input: Omit<LinkMembership, 'id' | 'createdAt' | 'archivedAt'>): Promise<LinkMembership>;
+  update(id: string, patch: Partial<Omit<LinkMembership, 'id' | 'createdAt'>>): Promise<LinkMembership>;
+  archive(id: string): Promise<void>;
+}
+
+/**
+ * Per-day Periodic Rest overrides — see `PrAssignment` in `types.ts`.
+ *
+ * Rows are addressed by `(linkId, positionNumber, runDate)`. There is no
+ * archive concept: overrides are operational state, not audit. `upsert`
+ * replaces the matching row in place; `deleteByKey` removes the override
+ * entirely so the projection default applies again.
+ */
+export interface PrAssignmentRepo {
+  list(opts?: { runDate?: string; linkId?: string }): Promise<PrAssignment[]>;
+  findByKey(linkId: string, positionNumber: number, runDate: string): Promise<PrAssignment | null>;
+  upsert(input: Omit<PrAssignment, 'id' | 'createdAt' | 'updatedAt'>): Promise<PrAssignment>;
+  deleteByKey(linkId: string, positionNumber: number, runDate: string): Promise<boolean>;
 }

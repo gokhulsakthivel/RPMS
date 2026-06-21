@@ -2,6 +2,9 @@
 // (components.md §9 / design.md §9.2).
 //
 // 7 columns: Name · Role · Grade · Status · Rest remaining · Eligible for · Actions.
+// Phase 2 (Links): when `linkInfoByCrewId` is provided, a "Link" column is
+// inserted between Grade and Status showing the crew's resolved position
+// for the selected date.
 //
 // **Employee ID is NOT displayed** (design.md §9.2) — operators identify
 // crew by name. The Role column carries the LP/ALP distinction.
@@ -14,11 +17,22 @@ import { StatusBadge } from '../primitives/StatusBadge';
 import { CrewEligibleForCell } from './CrewEligibleForCell';
 import { CrewGradeBadge } from './CrewGradeBadge';
 
+export interface CrewLinkInfo {
+  linkName: string;
+  positionNumber: number;
+  kind: 'DUTY' | 'OFF' | 'PR';
+}
+
 export interface CrewTableProps {
   rows: ReadonlyArray<CrewRow>;
   onEdit: (row: CrewRow) => void;
   onArchive: (row: CrewRow) => void;
   emptyState?: React.ReactNode;
+  /**
+   * Per-crew Link projection for the operator's selected date. When
+   * provided, inserts a "Link" column between Grade and Status.
+   */
+  linkInfoByCrewId?: ReadonlyMap<string, CrewLinkInfo>;
 }
 
 export function CrewTable({
@@ -26,8 +40,9 @@ export function CrewTable({
   onEdit,
   onArchive,
   emptyState,
+  linkInfoByCrewId,
 }: CrewTableProps) {
-  const columns: ReadonlyArray<Column<CrewRow>> = [
+  const columns: Array<Column<CrewRow>> = [
     {
       key: 'name',
       header: 'Name',
@@ -43,6 +58,17 @@ export function CrewTable({
       header: 'Grade',
       cell: (r) => <CrewGradeBadge grade={r.grade} />,
     },
+  ];
+
+  if (linkInfoByCrewId) {
+    columns.push({
+      key: 'link',
+      header: 'Link',
+      cell: (r) => <LinkCell info={linkInfoByCrewId.get(r.id)} />,
+    });
+  }
+
+  columns.push(
     {
       key: 'status',
       header: 'Status',
@@ -85,7 +111,7 @@ export function CrewTable({
         </div>
       ),
     },
-  ];
+  );
 
   return (
     <DataTable
@@ -98,3 +124,24 @@ export function CrewTable({
     />
   );
 }
+
+function LinkCell({ info }: { info: CrewLinkInfo | undefined }) {
+  if (!info) return <span className="crew-table__link crew-table__link--none">—</span>;
+  const cls =
+    info.kind === 'OFF'
+      ? 'crew-table__link-pill crew-table__link-pill--off'
+      : info.kind === 'PR'
+        ? 'crew-table__link-pill crew-table__link-pill--pr'
+        : 'crew-table__link-pill crew-table__link-pill--duty';
+  return (
+    <span className="crew-table__link">
+      <span className="crew-table__link-name" title={info.linkName}>
+        {info.linkName}
+      </span>
+      <span className={cls}>
+        #{info.positionNumber} · {info.kind}
+      </span>
+    </span>
+  );
+}
+

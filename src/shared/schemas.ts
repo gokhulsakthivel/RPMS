@@ -7,7 +7,7 @@
 // `Date` instances.
 
 import { z } from 'zod';
-import { DayOfWeek, LeaveType, LpCategory, TrainType } from '../domain/types';
+import { DayOfWeek, LeaveType, LinkPositionKind, LpCategory, TrainType } from '../domain/types';
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -391,6 +391,107 @@ export interface AssignmentDraftCommitResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Auto-Draft from Links (HLD §4.12 / Phase 3)
+// ---------------------------------------------------------------------------
+
+/** Machine-readable skip reason — mirrors `AutoDraftSkipReason` in app/. */
+export type AutoDraftSkipReasonWire =
+  | { code: 'ALREADY_ASSIGNED' }
+  | { code: 'ALREADY_DRAFTED' }
+  | { code: 'NO_LINK_FOR_TRAIN' }
+  | { code: 'NO_LP_MEMBER_AT_POSITION' }
+  | { code: 'NO_ALP_MEMBER_AT_POSITION' }
+  | { code: 'LP_NOT_ELIGIBLE'; lpId: string }
+  | { code: 'LP_ON_LEAVE'; lpId: string }
+  | { code: 'LP_WINDOW_CONFLICT'; lpId: string; conflictingAssignmentId: string }
+  | { code: 'ALP_NOT_ELIGIBLE'; alpId: string }
+  | { code: 'ALP_ON_LEAVE'; alpId: string }
+  | { code: 'ALP_WINDOW_CONFLICT'; alpId: string; conflictingAssignmentId: string }
+  | { code: 'SECOND_ALP_NOT_SUPPORTED' };
+
+export interface AutoDraftMatchedRow {
+  trainId: string;
+  trainNumber: string;
+  trainName: string;
+  lpId: string;
+  lpName: string;
+  alpId?: string;
+  alpName?: string;
+  lpLinkName: string;
+  alpLinkName?: string;
+  positionNumber: number;
+}
+
+export interface AutoDraftSkippedRow {
+  trainId: string;
+  trainNumber: string;
+  reason: AutoDraftSkipReasonWire;
+}
+
+export interface AutoDraftResponse {
+  matched: AutoDraftMatchedRow[];
+  skipped: AutoDraftSkippedRow[];
+}
+
+// ---------------------------------------------------------------------------
+// PR Assignments — per-day overrides for Periodic Rest positions on a Link.
+// ---------------------------------------------------------------------------
+
+/**
+ * One PR slot for a given IST `runDate`, enriched with the link's default
+ * crew (from the projection) and any per-day override the operator has set.
+ *
+ * `defaultCrew` is the crew the normal rotation places on this PR position
+ * for the day. `override` is the explicit operator pick — null if no row
+ * exists in `pr_assignments.csv` for this slot. When `override.crewId === ''`
+ * the operator has explicitly cleared the PR for the day ("no PR today").
+ *
+ * `resolvedCrew` is the convenience field consumers should render: it
+ * follows the rule (`override` set with crew -> that crew; `override` set
+ * empty -> null; no override -> default).
+ */
+export interface PrAssignmentRow {
+  linkId: string;
+  linkName: string;
+  positionNumber: number;
+  runDate: string;
+  crewRole: 'LP' | 'ALP';
+  defaultCrew: { id: string; name: string } | null;
+  override: {
+    id: string;
+    crewId: string;
+    crewName: string;
+    updatedAt: string;
+  } | null;
+  resolvedCrew: { id: string; name: string } | null;
+}
+
+/**
+ * `PUT /api/pr-assignments` body — upsert one PR override.
+ *
+ * `crewId: ''` means "no PR today" (explicit clear that suppresses the
+ * default). To remove the override entirely (so the default applies),
+ * call `DELETE` instead.
+ */
+export const PrAssignmentUpsertInput = z.object({
+  linkId: nonEmptyString,
+  positionNumber: z.number().int().positive(),
+  runDate: isoCalendarDate,
+  crewRole: z.enum(['LP', 'ALP']),
+  /** Empty string is meaningful ("no PR today"); see header doc. */
+  crewId: z.string(),
+});
+export type PrAssignmentUpsertInput = z.infer<typeof PrAssignmentUpsertInput>;
+
+export const PrAssignmentDeleteInput = z.object({
+  linkId: nonEmptyString,
+  positionNumber: z.coerce.number().int().positive(),
+  runDate: isoCalendarDate,
+});
+export type PrAssignmentDeleteInput = z.infer<typeof PrAssignmentDeleteInput>;
+
+
+// ---------------------------------------------------------------------------
 // Query params
 // ---------------------------------------------------------------------------
 
@@ -756,3 +857,233 @@ export interface ApiErrorResponse {
   // any additional context fields from the discriminated union
   [k: string]: unknown;
 }
+
+// ---------------------------------------------------------------------------
+// Links — predefined duty rotations (HLD §4.9–§4.11, LLD §2.1).
+// ---------------------------------------------------------------------------
+
+/**
+ * `signOffDayOffset` is integer-bounded the same way as
+ * `Train.inwardArrivalDayOffset`. No real published link segment exceeds
+ * a 3-day envelope.
+ */
+const signOffDayOffsetSchema = z
+  .number()
+  .int('signOffDayOffset must be an integer')
+  .min(0, 'signOffDayOffset must be ≥ 0')
+  .max(3, 'signOffDayOffset must be ≤ 3');
+
+/**
+ * One train run inside a `DUTY` position. Times are IST `HH:MM` strings
+ * — the orchestrator materializes UTC instants per run-date the same way
+ * Train schedules are materialized.
+ */
+export const LinkSegmentSchema = z.object({
+  trainNumber: nonEmptyString,
+  /**
+   * Direction tag from the printed link sheet's `Direction` column.
+   * Drives the inward → outward assignment lookup chain. Optional for
+   * legacy data — inferred from station codes when missing.
+   */
+  direction: z.enum(['outward', 'inward', 'conti']).optional(),
+  /** Optional printed origin/destination from the depot link sheet. */
+  fromStation: nonEmptyString.optional(),
+  toStation: nonEmptyString.optional(),
+  signOnTimeOfDay: timeOfDaySchema,
+  signOffTimeOfDay: timeOfDaySchema,
+  signOffDayOffset: signOffDayOffsetSchema,
+});
+export type LinkSegmentInput = z.infer<typeof LinkSegmentSchema>;
+
+/**
+ * A single position. Discriminated on `kind`. `DUTY` positions require at
+ * least one segment; `OFF` and `PR` carry only the position number.
+ */
+export const LinkPositionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    positionNumber: z.number().int().min(1),
+    kind: z.literal(LinkPositionKind.DUTY),
+    segments: z.array(LinkSegmentSchema).min(1, 'DUTY position must have at least one segment'),
+  }),
+  z.object({
+    positionNumber: z.number().int().min(1),
+    kind: z.literal(LinkPositionKind.OFF),
+  }),
+  z.object({
+    positionNumber: z.number().int().min(1),
+    kind: z.literal(LinkPositionKind.PR),
+  }),
+]);
+export type LinkPositionInput = z.infer<typeof LinkPositionSchema>;
+
+/**
+ * Cross-field invariants applied on every Link create/update:
+ *   - `cycleLength === positions.length`
+ *   - `positions[i].positionNumber === i + 1` for every i
+ *   - `lpCategory` set ⇒ `crewRole === 'LP'`
+ */
+const linkBase = z
+  .object({
+    name: nonEmptyString,
+    crewRole: crewRoleSchema,
+    lpCategory: lpCategorySchema.optional(),
+    cycleLength: z.number().int().min(1, 'cycleLength must be ≥ 1'),
+    positions: z.array(LinkPositionSchema).min(1, 'positions must contain at least one position'),
+  })
+  .refine((v) => v.positions.length === v.cycleLength, {
+    message: 'cycleLength must equal positions.length',
+    path: ['cycleLength'],
+  })
+  .refine((v) => v.positions.every((p, i) => p.positionNumber === i + 1), {
+    message: 'positions[i].positionNumber must equal i + 1 (positions must be 1-based and contiguous)',
+    path: ['positions'],
+  })
+  .refine((v) => v.lpCategory === undefined || v.crewRole === 'LP', {
+    message: 'lpCategory may only be set when crewRole is LP',
+    path: ['lpCategory'],
+  });
+
+export const LinkCreateInput = linkBase;
+export type LinkCreateInput = z.infer<typeof LinkCreateInput>;
+
+/**
+ * For PUT we keep the same cross-field validations but allow individual
+ * top-level fields to be omitted. The repo merges the patch over the
+ * stored row before re-validating.
+ */
+export const LinkUpdateInput = z
+  .object({
+    name: nonEmptyString.optional(),
+    crewRole: crewRoleSchema.optional(),
+    lpCategory: lpCategorySchema.nullable().optional(),
+    cycleLength: z.number().int().min(1).optional(),
+    positions: z.array(LinkPositionSchema).min(1).optional(),
+  })
+  .refine(
+    (v) =>
+      v.cycleLength === undefined ||
+      v.positions === undefined ||
+      v.positions.length === v.cycleLength,
+    {
+      message: 'cycleLength must equal positions.length when both are supplied',
+      path: ['cycleLength'],
+    },
+  )
+  .refine(
+    (v) =>
+      v.positions === undefined ||
+      v.positions.every((p, i) => p.positionNumber === i + 1),
+    {
+      message: 'positions[i].positionNumber must equal i + 1',
+      path: ['positions'],
+    },
+  );
+export type LinkUpdateInput = z.infer<typeof LinkUpdateInput>;
+
+// ---------------------------------------------------------------------------
+// Link Membership — anchors one crew member at one position on one date.
+// ---------------------------------------------------------------------------
+
+export const LinkMembershipCreateInput = z.object({
+  linkId: nonEmptyString,
+  crewId: nonEmptyString,
+  crewRole: crewRoleSchema,
+  anchorDate: isoCalendarDate,
+  anchorPositionNumber: z.number().int().min(1),
+});
+export type LinkMembershipCreateInput = z.infer<typeof LinkMembershipCreateInput>;
+
+export const LinkMembershipUpdateInput = z
+  .object({
+    crewId: nonEmptyString.optional(),
+    crewRole: crewRoleSchema.optional(),
+    anchorDate: isoCalendarDate.optional(),
+    anchorPositionNumber: z.number().int().min(1).optional(),
+  })
+  .refine(
+    (v) =>
+      v.crewId !== undefined ||
+      v.crewRole !== undefined ||
+      v.anchorDate !== undefined ||
+      v.anchorPositionNumber !== undefined,
+    { message: 'at least one field must be supplied' },
+  );
+export type LinkMembershipUpdateInput = z.infer<typeof LinkMembershipUpdateInput>;
+
+// ---------------------------------------------------------------------------
+// Link wire shapes — what the API returns to the SPA.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wire form for a `LinkSegment`. Identical to the create-input shape — the
+ * server echoes back what was stored.
+ */
+export interface LinkSegmentRow {
+  trainNumber: string;
+  direction?: 'outward' | 'inward' | 'conti';
+  fromStation?: string;
+  toStation?: string;
+  signOnTimeOfDay: string;
+  signOffTimeOfDay: string;
+  signOffDayOffset: number;
+}
+
+export type LinkPositionRow =
+  | { positionNumber: number; kind: 'DUTY'; segments: LinkSegmentRow[] }
+  | { positionNumber: number; kind: 'OFF' }
+  | { positionNumber: number; kind: 'PR' };
+
+/**
+ * One row in `GET /api/links`. `memberCount` is the number of active
+ * memberships pointing at this link — handy for the list view's "16 of 19
+ * positions filled" hint without a second round-trip.
+ */
+export interface LinkRow {
+  id: string;
+  name: string;
+  crewRole: 'LP' | 'ALP';
+  lpCategory?: 'MAIL_EXPRESS' | 'PASSENGER';
+  cycleLength: number;
+  positions: LinkPositionRow[];
+  memberCount: number;
+  createdAt: string; // ISO-UTC
+}
+
+/**
+ * One row in `GET /api/links/:id/memberships`. `crewName` is resolved by
+ * the API so the table never has to join on the client.
+ */
+export interface LinkMembershipRow {
+  id: string;
+  linkId: string;
+  crewId: string;
+  crewRole: 'LP' | 'ALP';
+  crewName: string;
+  /** Resolved at request time — only present when `?asOfDate=` was provided. */
+  positionOnAsOfDate?: number;
+  anchorDate: string;
+  anchorPositionNumber: number;
+  createdAt: string; // ISO-UTC
+}
+
+/**
+ * One row in `GET /api/links/projection?date=YYYY-MM-DD` (HLD §4.10 / Phase 2).
+ *
+ * Each row describes one crew member's resolved position on the given run
+ * date. `position` carries the full resolved `LinkPosition` (DUTY segments,
+ * OFF, or PR) so the SPA can render the day's plan without a second
+ * round-trip.
+ */
+export interface LinkProjectionRow {
+  membershipId: string;
+  linkId: string;
+  linkName: string;
+  crewId: string;
+  crewRole: 'LP' | 'ALP';
+  crewName: string;
+  /** Only present for LPs — drives per-crew color coding in the board. */
+  lpCategory?: 'MAIL_EXPRESS' | 'PASSENGER';
+  positionNumber: number;
+  position: LinkPositionRow;
+}
+

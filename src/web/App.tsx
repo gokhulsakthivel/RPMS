@@ -13,6 +13,7 @@ import { AssignmentsPage } from './pages/AssignmentsPage';
 import { CrewPage } from './pages/CrewPage';
 import { CrewDiaryPage } from './pages/CrewDiaryPage';
 import { LeavesPage } from './pages/LeavesPage';
+import { LinksPage } from './pages/LinksPage';
 import { TrainsPage } from './pages/TrainsPage';
 
 // Strip trailing slash so BrowserRouter doesn't double-up.
@@ -29,6 +30,7 @@ export function App() {
             <Route path="/crew"        element={<CrewPage />} />
             <Route path="/assignments" element={<AssignmentsPage />} />
             <Route path="/leaves"      element={<LeavesPage />} />
+            <Route path="/links"       element={<LinksPage />} />
             <Route path="/crew-diary"  element={<CrewDiaryPage />} />
             {/* Default + 404 → /trains. The plan calls out the redirect
                 explicitly (M6 step 2). */}

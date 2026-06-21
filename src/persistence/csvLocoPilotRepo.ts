@@ -24,6 +24,7 @@ const LP_HEADER = [
   'eligibleTrainTypes',
   'lastSignOffTime',
   'archivedAt',
+  'isForeign',
 ] as const;
 
 const LP_CATEGORIES = new Set<string>(Object.values(LpCategory));
@@ -45,7 +46,10 @@ export class CsvLocoPilotRepo implements LocoPilotRepo {
 
   async list(opts: ActiveFilter = {}): Promise<LocoPilot[]> {
     const all = await this.readAll();
-    return opts.includeArchived ? all : all.filter((lp) => !lp.archivedAt);
+    if (opts.includeArchived) return all;
+    // Foreign staff are treated as inactive by default: excluded from
+    // assignable/available enumerations, but still resolvable by id.
+    return all.filter((lp) => !lp.archivedAt && !lp.isForeign);
   }
 
   async create(input: Omit<LocoPilot, 'id' | 'archivedAt'>): Promise<LocoPilot> {
@@ -143,6 +147,7 @@ function decodeLp(row: CsvRow): LocoPilot {
     eligibleTrainTypes: types,
     lastSignOffTime: decodeDate(row['lastSignOffTime'] ?? ''),
     archivedAt: decodeDate(row['archivedAt'] ?? ''),
+    isForeign: (row['isForeign'] ?? '').toLowerCase() === 'true',
   };
 }
 
@@ -154,6 +159,7 @@ function encodeLp(lp: LocoPilot): CsvRow {
     eligibleTrainTypes: encodePipeList(lp.eligibleTrainTypes),
     lastSignOffTime: encodeDate(lp.lastSignOffTime),
     archivedAt: encodeDate(lp.archivedAt),
+    isForeign: lp.isForeign ? 'true' : '',
   };
 }
 

@@ -23,6 +23,7 @@ const ALP_HEADER = [
   'eligibleTrainTypes',
   'lastSignOffTime',
   'archivedAt',
+  'isForeign',
 ] as const;
 
 const TRAIN_TYPES = new Set<string>(Object.values(TrainType));
@@ -52,7 +53,9 @@ export class CsvAssistantLocoPilotRepo implements AssistantLocoPilotRepo {
 
   async list(opts: ActiveFilter = {}): Promise<AssistantLocoPilot[]> {
     const all = await this.readAll();
-    return opts.includeArchived ? all : all.filter((alp) => !alp.archivedAt);
+    if (opts.includeArchived) return all;
+    // Foreign staff: see CsvLocoPilotRepo.list for rationale.
+    return all.filter((alp) => !alp.archivedAt && !alp.isForeign);
   }
 
   async create(
@@ -150,6 +153,7 @@ function decodeAlp(row: CsvRow): AssistantLocoPilot {
     eligibleTrainTypes: types,
     lastSignOffTime: decodeDate(row['lastSignOffTime'] ?? ''),
     archivedAt: decodeDate(row['archivedAt'] ?? ''),
+    isForeign: (row['isForeign'] ?? '').toLowerCase() === 'true',
   };
 }
 
@@ -160,6 +164,7 @@ function encodeAlp(alp: AssistantLocoPilot): CsvRow {
     eligibleTrainTypes: encodePipeList(alp.eligibleTrainTypes),
     lastSignOffTime: encodeDate(alp.lastSignOffTime),
     archivedAt: encodeDate(alp.archivedAt),
+    isForeign: alp.isForeign ? 'true' : '',
   };
 }
 

@@ -222,6 +222,11 @@ a:hover {
   margin: 0 auto;
   padding: var(--page-pad);
 }
+/* Links page wants to spread wider — the board has 2-up cards plus a
+ * sticky unassigned rail, and 1200px is too cramped. Use the full viewport. */
+.app-page:has(.links-board) {
+  max-width: none;
+}
 
 /* Date picker */
 .date-picker {
@@ -1190,6 +1195,18 @@ a:hover {
   font-size: var(--text-caption);
 }
 
+/* Link/position hint shown under the train number on the Plan table. */
+.assign-table__link-hint {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.assign-table__link-hint-pos {
+  font-variant-numeric: tabular-nums;
+}
+
 .assign-table__time {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1242,6 +1259,15 @@ a:hover {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* Phase 4 — EditAssignmentModal suggestion banner with inline Apply button. */
+.assign-modal__suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* ---------- HiddenCrewFootnote ----------------------------------------- */
@@ -1654,4 +1680,835 @@ a:hover {
 .crew-diary-leave-pill--pr {
   background: var(--accent-pr-bg);
   color: var(--accent-pr-text);
+}
+
+/* ------------------------------------------------------------------ */
+/* Links page (HLD §4.9 / Phase 1)                                    */
+/* ------------------------------------------------------------------ */
+.links-page__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .links-page__body {
+    grid-template-columns: 1fr;
+  }
+}
+.links-page__list {
+  min-width: 0;
+}
+
+.link-table__name {
+  font-weight: 600;
+}
+.link-table__cat--any {
+  color: var(--color-muted, #888);
+}
+.link-table__actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.link-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.link-form__positions {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #d0d4da);
+  border-radius: 6px;
+  background: var(--color-input-bg, #fff);
+  resize: vertical;
+  min-height: 200px;
+}
+.link-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.memberships-panel {
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #d0d4da);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.memberships-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.memberships-panel__title {
+  margin: 0;
+  font-size: 16px;
+}
+.memberships-panel__sub {
+  margin: 4px 0 0;
+  color: var(--color-muted, #666);
+  font-size: 12.5px;
+}
+.memberships-panel__header-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.memberships-panel__muted {
+  color: var(--color-muted, #999);
+}
+.memberships-panel__add {
+  border-top: 1px solid var(--color-border, #d0d4da);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.memberships-panel__add-title {
+  margin: 0;
+  font-size: 13.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted, #555);
+}
+.memberships-panel__add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Links board — physical-board mirror (HLD §4.10)                    */
+/* ------------------------------------------------------------------ */
+.links-page__head-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.links-board {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.links-board__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.links-board__title {
+  margin: 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted, #888);
+}
+
+.links-board__header-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+.links-board__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-muted, #888);
+  cursor: pointer;
+  user-select: none;
+}
+.links-board__toggle input {
+  cursor: pointer;
+}
+.links-board__legend {
+  display: inline-flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--color-muted, #888);
+  align-items: center;
+}
+.links-board__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.links-board__pr-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.links-board__pr-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted, #888);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.links-board__pr-dismiss:hover {
+  opacity: 1;
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+.links-board__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.links-board__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 16px;
+  align-items: start;
+}
+.links-board__main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .links-board__body {
+    grid-template-columns: 1fr;
+  }
+}
+.links-board__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-alt);
+}
+.links-board__rail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.links-board__rail-title {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted, #888);
+}
+.links-board__rail-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--color-muted, #888);
+}
+.links-board__bucket {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  padding: 8px 10px;
+}
+.links-board__bucket-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+}
+.links-board__bucket-title {
+  font-weight: 600;
+  font-size: 12px;
+  flex: 1;
+}
+.links-board__bucket-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--color-muted, #888);
+}
+.links-board__bucket-empty {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-muted, #888);
+  font-style: italic;
+}
+.links-board__bucket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.links-board__bucket-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.links-board__bucket-item + .links-board__bucket-item {
+  border-top: 1px dashed var(--color-border);
+}
+/* Rail sections (Eligible / Ineligible). The Ineligible variant grays
+ * out its contents and disables pointer interaction so the buckets
+ * remain visible but undraggable. */
+.links-board__rail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.links-board__rail-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 2px 0;
+}
+.links-board__rail-section-title {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted, #888);
+}
+.links-board__rail-section--disabled {
+  opacity: 0.55;
+}
+.links-board__rail-section--disabled .links-board__bucket {
+  background: var(--color-surface-alt);
+}
+.links-board__bucket-item--disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+}
+/* Drag handle inside a bucket item — preserves the existing two-column
+ * (name | meta) flex layout while making the row a single grabbable area. */
+.links-board__drag-handle {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  user-select: none;
+  touch-action: none;
+}
+/* Inline variant: used to wrap an individual pill so it can be picked up
+ * from inside a cell without breaking the cell's inline layout. */
+.links-board__drag-handle--inline {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  justify-content: flex-start;
+}
+.links-board__drag-handle:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+}
+.links-board__drag-handle--inline:hover {
+  background: transparent;
+}
+/* Drop targets — outline appears while a compatible drag is in flight. */
+.links-board__slot {
+  display: inline-block;
+  border-radius: 999px;
+  transition: box-shadow 100ms ease, background 100ms ease;
+}
+.links-board__slot--accept {
+  box-shadow: 0 0 0 1.5px rgba(34, 197, 94, 0.45);
+}
+.links-board__slot--over-ok {
+  box-shadow: 0 0 0 2px var(--color-success);
+  background: rgba(34, 197, 94, 0.12);
+}
+.links-board__slot--over-bad {
+  box-shadow: 0 0 0 2px var(--color-danger);
+  background: rgba(239, 68, 68, 0.12);
+  cursor: not-allowed;
+}
+.links-board__slot--reject {
+  opacity: 0.35;
+  filter: grayscale(0.6);
+}
+.links-board__slot--pending {
+  opacity: 0.5;
+  pointer-events: none;
+}
+/* Rail droppable — used as the "unassign" target when an assigned pill
+ * is dropped on the right rail. */
+.links-board__rail--accept {
+  box-shadow: inset 0 0 0 1.5px rgba(34, 197, 94, 0.45);
+}
+.links-board__rail--over-ok {
+  box-shadow: inset 0 0 0 2px var(--color-success);
+  background: rgba(34, 197, 94, 0.06);
+}
+/* Drag overlay — the floating chip that follows the pointer. */
+.links-board__drag-ghost {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  cursor: grabbing;
+  transform: rotate(-2deg);
+}
+.links-board__bucket-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.links-board__bucket-meta {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--color-muted, #888);
+  white-space: normal;
+  text-align: right;
+  flex-shrink: 0;
+}
+.links-board__unlinked {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-alt);
+}
+.links-board__card--unlinked {
+  border-style: dashed;
+  width: 100%;
+}
+.links-board__unlinked-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.links-board__unlinked-title {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted, #888);
+}
+.links-board__unlinked-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--color-muted, #888);
+}
+.links-board__unlinked-sub {
+  margin: 4px 10px 8px;
+  font-size: 11px;
+  color: var(--color-muted, #888);
+}
+.links-board__train-name {
+  margin-left: 6px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+}
+.links-board__card {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-alt);
+  overflow: hidden;
+}
+.links-board__card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.links-board__card-title {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.links-board__card-meta {
+  font-size: 11px;
+  color: var(--color-muted, #888);
+}
+.links-board__rows {
+  display: flex;
+  flex-direction: column;
+}
+.links-board__row {
+  display: grid;
+  grid-template-columns: 28px minmax(140px, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 12px;
+  min-height: 24px;
+  border-top: 1px solid var(--color-border);
+}
+.links-board__row:first-child {
+  border-top: none;
+}
+.links-board__row--head {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--color-muted, #888);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  min-height: 22px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.links-board__pos {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-align: right;
+  color: var(--color-muted, #888);
+  font-size: 11px;
+}
+.links-board__trains {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.links-board__train-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+/* One leg = a single glanceable token: `13351 → ERS`. Color encodes
+ * direction; outward is intentionally dull, inward stands out, conti is
+ * the muted continuation. */
+.links-board__leg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+.links-board__leg-num {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.links-board__leg-arrow {
+  opacity: 0.55;
+  font-weight: 400;
+}
+.links-board__leg-dest {
+  letter-spacing: 0.02em;
+}
+.links-board__leg--outward {
+  color: #f1f5f9;            /* slate-100 — bright, dominant */
+  background: rgba(148, 163, 184, 0.10);
+}
+.links-board__leg--inward {
+  color: #64748b;            /* slate-500 — disabled-button feel */
+  background: rgba(100, 116, 139, 0.08);
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  opacity: 0.7;
+}
+.links-board__leg--conti {
+  color: #94a3b8;            /* slate-400 */
+}
+/* When the row's first segment is inward, dim the LP/ALP pills too so
+ * the whole row reads as the "returning" (already-resolved) side.
+ * Inward rows are also fully non-interactive — no drag, no drop, no
+ * pointer cursor — so operators can't accidentally retarget the returning
+ * crew. The cell still renders for context. */
+.links-board__row--inward {
+  opacity: 0.55;
+  filter: saturate(0.75);
+  pointer-events: none;
+}
+.links-board__row--inward .lb-pill {
+  opacity: 1;
+  filter: none;
+}
+.links-board__row--inward .lb-pill--muted,
+.links-board__row--inward .lb-pill--empty {
+  opacity: 1;
+  filter: none;
+}
+/* One leg (train num + dest + dir badge) inside a position's segment
+ * chain. Each subsequent leg is prefixed with a "→" join so the
+ * same-day inward / conti chain reads left-to-right. */
+.links-board__seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.links-board__seg-join {
+  font-size: 11px;
+  color: var(--color-muted, #9ca3af);
+  opacity: 0.7;
+  padding: 0 1px;
+}
+.links-board__train-dest {
+  font-size: 11px;
+  color: var(--color-muted, #9ca3af);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.links-board__cell {
+  min-width: 0;
+}
+/* In a row, LP and ALP cells get equal grid tracks — make their pills
+ * fill the cell so the two tags read as the same size regardless of how
+ * long the crew names are. Names that overflow are ellipsis-trimmed.
+ *
+ * The pill can be wrapped by zero, one, or two of:
+ *   - DroppableSlot     (`.links-board__slot`)
+ *   - DraggableCrew     (`.links-board__drag-handle--inline`)
+ * in either order. Every wrapper in the chain must stretch so the inner
+ * pill ends up full-width regardless of which combination is rendered. */
+.links-board__cell > .lb-pill,
+.links-board__cell > .links-board__slot,
+.links-board__cell > .links-board__drag-handle--inline,
+.links-board__cell .links-board__slot > .lb-pill,
+.links-board__cell .links-board__slot > .links-board__drag-handle--inline,
+.links-board__cell .links-board__drag-handle--inline > .lb-pill,
+.links-board__cell .links-board__drag-handle--inline > .links-board__slot,
+.links-board__cell .links-board__slot > .links-board__drag-handle--inline > .lb-pill,
+.links-board__cell .links-board__drag-handle--inline > .links-board__slot > .lb-pill {
+  display: flex;
+  width: 100%;
+}
+
+/* Tags & pills shared by the board */
+.lb-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+.lb-tag--train {
+  background: #b91c1c;
+  color: #fff;
+}
+.lb-tag--off {
+  background: #4b5563;
+  color: #fff;
+}
+.lb-tag--pr {
+  background: #92400e;
+  color: #fde68a;
+}
+.lb-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.lb-pill--mail {
+  background: #1d4ed8;
+  color: #fff;
+}
+.lb-pill--passenger {
+  background: #15803d;
+  color: #fff;
+}
+.lb-pill--alp {
+  background: #eab308;
+  color: #1f2937;
+}
+.lb-pill--muted {
+  background: transparent;
+  color: var(--color-muted, #6b7280);
+  font-weight: 500;
+}
+.lb-pill--empty {
+  background: transparent;
+  color: var(--color-muted, #6b7280);
+  font-weight: 500;
+  font-style: italic;
+  border: 1px dashed var(--color-border);
+}
+.lb-pill--assigned {
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.18) inset;
+}
+.lb-pill__dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* ------------------------------------------------------------------ */
+/* Crew table — Link column (Phase 2)                                  */
+/* ------------------------------------------------------------------ */
+.crew-table__link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.crew-table__link--none {
+  color: var(--color-muted, #aaa);
+}
+.crew-table__link-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+.crew-table__link-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  width: fit-content;
+}
+.crew-table__link-pill--duty {
+  background: var(--accent-training-bg, #e1f3ff);
+  color: var(--accent-training-text, #00557d);
+}
+.crew-table__link-pill--off {
+  background: var(--accent-leave-bg, #eef2f6);
+  color: var(--accent-leave-text, #4a5566);
+}
+.crew-table__link-pill--pr {
+  background: var(--accent-pr-bg, #fff2dc);
+  color: var(--accent-pr-text, #8a5a00);
+}
+
+/* ----------------------------------------------------------------------------
+ * Station chips — color-code destination codes by station so operators can
+ * visually distinguish endpoints (ERS vs MTP vs JTJ etc.) at a glance.
+ * Used on the Links board (`.links-board__train-dest`) and the Plan-table
+ * row hint (`.assign-table__link-hint-pos .station-chip`).
+ * Palette is hand-tuned for contrast on the light theme; tweak with care.
+ * -------------------------------------------------------------------------- */
+.station-chip {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  background: #f3f4f6;
+  color: #374151;
+}
+.station-chip--cbe { background: #e5e7eb; color: #1f2937; }     /* depot — neutral */
+.station-chip--ers { background: #ccfbf1; color: #115e59; }     /* teal */
+.station-chip--mtp { background: #fef3c7; color: #92400e; }     /* amber */
+.station-chip--tpj { background: #e0e7ff; color: #3730a3; }     /* indigo */
+.station-chip--jtj { background: #ffe4e6; color: #9f1239; }     /* rose */
+.station-chip--mdu { background: #ffedd5; color: #9a3412; }     /* orange */
+.station-chip--ed  { background: #e0f2fe; color: #075985; }     /* sky */
+.station-chip--sa  { background: #ede9fe; color: #5b21b6; }     /* violet */
+.station-chip--poy { background: #ecfccb; color: #3f6212; }     /* lime */
+.station-chip--ptj { background: #cffafe; color: #155e75; }     /* cyan */
+
+/* When the chip lives inside the Plan-table hint inline group, keep it
+ * compact and don't blow up the row height. */
+.assign-table__link-hint-pos .station-chip {
+  font-size: 10.5px;
+  padding: 0 4px;
+}
+
+/* Direction tags on the Plan table row hint AND the Links board.
+ * Re-uses the same color buckets so a glance maps direction → meaning. */
+.assign-table__dir,
+.lb-dir {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 9.5px;
+  line-height: 1.55;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.assign-table__dir--outward,
+.lb-dir--outward {
+  background: #dcfce7;  /* green-100 */
+  color: #14532d;       /* green-900 */
+}
+.assign-table__dir--inward,
+.lb-dir--inward {
+  background: #fee2e2;  /* red-100 */
+  color: #7f1d1d;       /* red-900 */
+}
+.assign-table__dir--conti,
+.lb-dir--conti {
+  background: #f1f5f9;  /* slate-100 */
+  color: #475569;       /* slate-600 */
+}
+
+/* ---------- Periodic Rest section ------------------------------------- */
+.assignments__pr-section {
+  margin-top: 32px;
+}
+.assignments__pr-heading {
+  font-size: var(--text-h3);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.assignments__pr-sub {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  margin: 0 0 12px;
+}
+.assign-table__crew--muted {
+  color: var(--color-text-muted);
+}
+.badge--muted {
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+.badge--info {
+  background: #dbeafe;  /* blue-100 */
+  color: #1e3a8a;       /* blue-900 */
 }

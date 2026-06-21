@@ -12,15 +12,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   assistantLocoPilots as alpApi,
+  links as linksApi,
   locoPilots as lpApi,
 } from '../lib/api';
 import { describeApiError } from '../lib/errors';
 import { useSelectedDate } from '../lib/useSelectedDate';
-import type { CrewRow } from '../../shared/schemas';
+import type { CrewRow, LinkProjectionRow } from '../../shared/schemas';
 import { PageHeader } from '../components/PageHeader';
 import { refreshSummary } from '../components/chrome/SummaryCards';
 import { AddCrewModal } from '../components/crew/AddCrewModal';
-import { CrewTable } from '../components/crew/CrewTable';
+import { CrewTable, type CrewLinkInfo } from '../components/crew/CrewTable';
 import { EditCrewModal } from '../components/crew/EditCrewModal';
 import { Banner } from '../components/feedback/Banner';
 import { EmptyState } from '../components/feedback/EmptyState';
@@ -35,6 +36,7 @@ export function CrewPage() {
 
   const [lps, setLps] = useState<CrewRow[] | null>(null);
   const [alps, setAlps] = useState<CrewRow[] | null>(null);
+  const [projection, setProjection] = useState<LinkProjectionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
@@ -50,14 +52,17 @@ export function CrewPage() {
     setError(null);
     setLps(null);
     setAlps(null);
+    setProjection(null);
     Promise.all([
       lpApi.list(selectedDate),
       alpApi.list(selectedDate),
+      linksApi.projection(selectedDate).catch(() => [] as LinkProjectionRow[]),
     ])
-      .then(([lpRows, alpRows]) => {
+      .then(([lpRows, alpRows, proj]) => {
         if (cancelled) return;
         setLps(lpRows);
         setAlps(alpRows);
+        setProjection(proj);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -77,6 +82,19 @@ export function CrewPage() {
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
     );
   }, [lps, alps]);
+
+  const linkInfoByCrewId = useMemo<ReadonlyMap<string, CrewLinkInfo> | undefined>(() => {
+    if (!projection) return undefined;
+    const map = new Map<string, CrewLinkInfo>();
+    for (const r of projection) {
+      map.set(r.crewId, {
+        linkName: r.linkName,
+        positionNumber: r.positionNumber,
+        kind: r.position.kind,
+      });
+    }
+    return map;
+  }, [projection]);
 
   async function confirmArchive() {
     if (!archiving) return;
@@ -123,7 +141,7 @@ export function CrewPage() {
       ) : null}
 
       {rows === null && !error ? (
-        <SkeletonRows rows={6} columns={7} />
+        <SkeletonRows rows={6} columns={8} />
       ) : rows && rows.length === 0 ? (
         <EmptyState
           icon="🧑‍✈️"
@@ -136,6 +154,7 @@ export function CrewPage() {
           rows={rows}
           onEdit={setEditing}
           onArchive={setArchiving}
+          linkInfoByCrewId={linkInfoByCrewId}
         />
       ) : null}
 

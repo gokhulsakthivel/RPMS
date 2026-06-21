@@ -22,12 +22,15 @@
 import { Router } from 'express';
 import { archiveAssignment } from '../application/archiveAssignment';
 import { assignCrew } from '../application/assignCrew';
+import { autoDraftFromLinks } from '../application/autoDraftFromLinks';
 import { updateAssignment } from '../application/updateAssignment';
 import {
   AssignmentDraftRepo,
   AssignmentRepo,
   AssistantLocoPilotRepo,
   LeaveRepo,
+  LinkMembershipRepo,
+  LinkRepo,
   LocoPilotRepo,
   TrainRepo,
 } from '../domain/repositories';
@@ -37,6 +40,9 @@ import {
   AssignmentDraftCommitResult,
   AssignmentDraftRow,
   AssignmentDraftStageInput,
+  AutoDraftMatchedRow,
+  AutoDraftResponse,
+  AutoDraftSkippedRow,
   DateQuery,
 } from '../shared/schemas';
 import { asyncHandler, requireParam } from './errorMiddleware';
@@ -48,6 +54,8 @@ export interface AssignmentDraftsRouterDeps {
   alps: AssistantLocoPilotRepo;
   assignments: AssignmentRepo;
   leaves: LeaveRepo;
+  links: LinkRepo;
+  linkMemberships: LinkMembershipRepo;
 }
 
 export function createAssignmentDraftsRouter(
@@ -128,6 +136,81 @@ export function createAssignmentDraftsRouter(
       }
 
       const body: AssignmentDraftCommitResponse = { results };
+      res.json(body);
+    }),
+  );
+
+  // -------------------------------------------------------------------------
+  // POST /api/assignment-drafts/auto?date=YYYY-MM-DD   (HLD §4.12 / Phase 3)
+  //
+  // For every train running on `date` that does NOT already have an active
+  // assignment or staged draft, propose an LP (and ALP if the train type
+  // requires one) sourced from active link memberships. Validated against
+  // the same eligibility / leave / window rules that `assignCrew` enforces,
+  // then upserted into the draft cart. Operators commit through the
+  // existing `+ Assign (N)` flow — Auto-Draft never touches the live
+  // assignments table.
+  // -------------------------------------------------------------------------
+  router.post(
+    '/auto',
+    asyncHandler(async (req, res) => {
+      const { date } = DateQuery.parse(req.query);
+
+      const existingDrafts = await deps.drafts.list({ runDate: date });
+      const existingDraftTrainIds = new Set(existingDrafts.map((d) => d.trainId));
+
+      const { proposals, skipped } = await autoDraftFromLinks(
+        {
+          trains: deps.trains,
+          lps: deps.lps,
+          alps: deps.alps,
+          assignments: deps.assignments,
+          drafts: deps.drafts,
+          leaves: deps.leaves,
+          links: deps.links,
+          linkMemberships: deps.linkMemberships,
+        },
+        { runDate: date, existingDraftTrainIds },
+      );
+
+      const matched: AutoDraftMatchedRow[] = [];
+      for (const p of proposals) {
+        await deps.drafts.upsert({
+          kind: 'create',
+          trainId: p.train.id,
+          trainNumber: p.train.number,
+          trainName: p.train.name,
+          trainType: p.train.type,
+          runDate: p.runDate,
+          departureTime: p.departureTime,
+          lpId: p.lp.id,
+          lpName: p.lp.name,
+          ...(p.alp ? { alpId: p.alp.id, alpName: p.alp.name } : {}),
+        });
+        const row: AutoDraftMatchedRow = {
+          trainId: p.train.id,
+          trainNumber: p.train.number,
+          trainName: p.train.name,
+          lpId: p.lp.id,
+          lpName: p.lp.name,
+          lpLinkName: p.lpLinkName,
+          positionNumber: p.positionNumber,
+        };
+        if (p.alp) {
+          row.alpId = p.alp.id;
+          row.alpName = p.alp.name;
+        }
+        if (p.alpLinkName) row.alpLinkName = p.alpLinkName;
+        matched.push(row);
+      }
+
+      const skippedWire: AutoDraftSkippedRow[] = skipped.map((s) => ({
+        trainId: s.trainId,
+        trainNumber: s.trainNumber,
+        reason: s.reason,
+      }));
+
+      const body: AutoDraftResponse = { matched, skipped: skippedWire };
       res.json(body);
     }),
   );

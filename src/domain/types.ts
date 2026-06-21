@@ -89,6 +89,13 @@ export interface LocoPilot {
   lastSignOffTime?: Date;
   /** UTC; undefined for active rows. */
   archivedAt?: Date;
+  /**
+   * Foreign-staff tag: crew physically on the board but not tracked by
+   * this depot. Excluded from default `list()` enumerations (summary
+   * counts, assignable lists, Crew page) but still resolvable by id so
+   * the Links board can display them.
+   */
+  isForeign?: boolean;
 }
 
 export interface AssistantLocoPilot {
@@ -103,6 +110,8 @@ export interface AssistantLocoPilot {
   lastSignOffTime?: Date;
   /** UTC; undefined for active rows. */
   archivedAt?: Date;
+  /** See `LocoPilot.isForeign`. */
+  isForeign?: boolean;
 }
 
 export interface Train {
@@ -311,3 +320,150 @@ export type Result<T, E> =
 
 export const ok  = <T>(value: T): Result<T, never>  => ({ ok: true,  value });
 export const err = <E>(error: E): Result<never, E>  => ({ ok: false, error });
+
+// ---------------------------------------------------------------------------
+// 5. Links — predefined duty rotations (HLD §4.9–§4.11, LLD §2.1).
+// ---------------------------------------------------------------------------
+
+/**
+ * Kinds of position inside a Link cycle.
+ *
+ * - `DUTY` — one tour of duty composed of one or more chained train segments.
+ *            Same-position segments are treated as one continuous tour by the
+ *            Auto-Draft orchestrator (HLD §4.11). Ad-hoc assignments still
+ *            enforce the full 16-hour rest rule between segments.
+ * - `OFF`  — a single calendar day off. No duty, no formal rest accounting.
+ * - `PR`   — Periodic Rest. A long rest block (typically ≥ 30h) that
+ *            satisfies §4.3 between the surrounding duty positions.
+ */
+export enum LinkPositionKind {
+  DUTY = 'DUTY',
+  OFF  = 'OFF',
+  PR   = 'PR',
+}
+
+/**
+ * One train run inside a `DUTY` position. Times are IST `HH:MM` strings —
+ * absolute UTC instants are materialized at use-time via `shared/time.ts`,
+ * matching how `Train.departureTimeOfDay` is handled.
+ */
+export interface LinkSegment {
+  /** Train number — joined to `Train.number` (the unique-forever identifier). */
+  trainNumber: string;
+  /**
+   * Position of this segment within its DUTY position— sourced from the
+   * printed depot link sheet's `Direction` column:
+   *   - `outward` = depot-leaving leg (originates from the home depot).
+   *   - `inward`  = depot-arriving leg (terminates at the home depot).
+   *   - `conti`   = middle leg of a multi-segment chain that neither
+   *                 starts nor ends a depot trip (e.g. shuttle in the
+   *                 hills).
+   * Optional for backwards compatibility — callers that need direction
+   * dispatch fall back to inferring from `fromStation` / `toStation`.
+   */
+  direction?: 'outward' | 'inward' | 'conti';
+  /**
+   * Originating station code as printed on the depot link sheet (e.g. `CBE`,
+   * `MTP`, `ERS`). Optional for backwards compatibility with older link
+   * data; when present the UI uses it verbatim instead of joining on the
+   * trains roster.
+   */
+  fromStation?: string;
+  /** Destination station code as printed on the depot link sheet. */
+  toStation?: string;
+  /** IST `HH:MM` (24h) — sign-on at the start of this segment. */
+  signOnTimeOfDay: TimeOfDayString;
+  /** IST `HH:MM` (24h) — sign-off at the end of this segment. */
+  signOffTimeOfDay: TimeOfDayString;
+  /**
+   * Days the segment's sign-off lands AFTER the position's run date in IST.
+   * 0 = same day, 1 = next day (overnight), and so on. Capped at 3 — no real
+   * Indian Railways link segment exceeds that envelope.
+   */
+  signOffDayOffset: number;
+}
+
+/** A single position in a Link cycle. Discriminated on `kind`. */
+export type LinkPosition =
+  | { positionNumber: number; kind: LinkPositionKind.DUTY; segments: LinkSegment[] }
+  | { positionNumber: number; kind: LinkPositionKind.OFF }
+  | { positionNumber: number; kind: LinkPositionKind.PR  };
+
+/**
+ * A predefined duty rotation. The cycle has `cycleLength` positions, and
+ * `positions[i].positionNumber === i + 1` for every i. The CSV loader
+ * enforces this and the per-kind invariants (DUTY needs ≥ 1 segment, etc.).
+ */
+export interface Link {
+  id: string;
+  /** Display label, e.g. `CBE MAIL LINK - 19 MEN`. */
+  name: string;
+  /** Crew role this link is for — drives which roster supplies memberships. */
+  crewRole: CrewRole;
+  /**
+   * Optional role label. Set ONLY when `crewRole === 'LP'` and the link is
+   * authored for a specific LP category (e.g. Mail Express LPs only). The
+   * loader rejects rows where this is set with `crewRole === 'ALP'`.
+   */
+  lpCategory?: LpCategory;
+  /** Cycle length — equal to `positions.length`. Always ≥ 1. */
+  cycleLength: number;
+  /** Ordered list, `positions.length === cycleLength`. */
+  positions: LinkPosition[];
+  /** UTC. */
+  createdAt: Date;
+  /** UTC; undefined for active rows. */
+  archivedAt?: Date;
+}
+
+/**
+ * Places one crew member on one Link. The pair `(anchorDate,
+ * anchorPositionNumber)` makes the rotation deterministic for any future or
+ * past calendar date — see `linkSchedule.positionOnDate`.
+ *
+ * `crewRole` MUST equal the parent Link's `crewRole`. The loader and Phase 1
+ * API both reject violations.
+ */
+export interface LinkMembership {
+  id: string;
+  linkId: string;
+  /** LP.id when `crewRole === 'LP'`, ALP.id when `crewRole === 'ALP'`. */
+  crewId: string;
+  crewRole: CrewRole;
+  /** IST calendar date `YYYY-MM-DD` at which `anchorPositionNumber` applies. */
+  anchorDate: string;
+  /** 1-based position the crew member sits at on `anchorDate`. */
+  anchorPositionNumber: number;
+  /** UTC. */
+  createdAt: Date;
+  /** UTC; undefined for active rows. */
+  archivedAt?: Date;
+}
+
+/**
+ * Per-day override for a Periodic Rest (PR) position on a Link.
+ *
+ * The Links projection resolves a default crew for each PR slot via the
+ * normal rotation. A `PrAssignment` overrides that default for one IST
+ * `runDate`. Uniqueness key: `(linkId, positionNumber, runDate)`.
+ *
+ * - `crewId` populated  -> operator picked a different crew for this PR day.
+ * - `crewId` empty      -> operator explicitly suppressed the PR for this day
+ *                          ("no PR today"). Projection consumers should treat
+ *                          this as a deliberate absence rather than a default.
+ *
+ * No row in the table   -> fall back to the projection default.
+ */
+export interface PrAssignment {
+  id: string;
+  linkId: string;
+  positionNumber: number;
+  /** IST calendar date `YYYY-MM-DD`. */
+  runDate: string;
+  crewRole: CrewRole;
+  /** Empty string = explicit "no PR today" override. */
+  crewId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+

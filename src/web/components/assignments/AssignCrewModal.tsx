@@ -38,6 +38,7 @@ import { TrainTypeBadge } from '../trains/TrainTypeBadge';
 import { formatIst } from '../../lib/time';
 import { EligibleCrewSelect } from './EligibleCrewSelect';
 import { HiddenCrewFootnote } from './HiddenCrewFootnote';
+import type { LinkSuggestion } from './linkSuggestions';
 import {
   type StagedCreate,
   type StagedOp,
@@ -60,6 +61,13 @@ export interface AssignCrewModalProps {
    * re-opening the modal on a draft row keeps that draft's picks visible.
    */
   staged?: ReadonlyMap<string, StagedOp>;
+  /**
+   * Phase 4 — Link-derived suggestion for this train + runDate. If both
+   * provided and the suggested crew appear in the eligible list, the modal
+   * pre-fills the dropdowns and surfaces a banner crediting the source link.
+   * Ignored when an existing draft is being re-edited.
+   */
+  linkSuggestion?: LinkSuggestion | null;
   onClose: () => void;
   /**
    * Called when the operator clicks Save. Emits a `'create'` op carrying
@@ -75,6 +83,7 @@ export function AssignCrewModal({
   initialAlpId = null,
   initialAlpId2 = null,
   staged,
+  linkSuggestion = null,
   onClose,
   onStage,
 }: AssignCrewModalProps) {
@@ -170,6 +179,40 @@ export function AssignCrewModal({
   const lpStagedHidden = eligibleLp.length - lpOptions.length;
   const alpStagedHidden = eligibleAlp.length - alpOptions.length;
   const alp2StagedHidden = eligibleAlp.length - alp2Options.length;
+
+  // Phase 4 — auto-apply link suggestion once eligibility resolves, but
+  // only on a fresh draft (no `initial*Id`). We additionally require the
+  // suggested crew to appear in the still-eligible-after-staged-filter
+  // option list — otherwise we'd pre-fill an invalid pick. We also won't
+  // overwrite an operator's in-progress edit (only run when buffered state
+  // matches the unchanged baseline of `null`).
+  const lpSuggestedAppliedId =
+    linkSuggestion?.lp && lpOptions.some((o) => o.id === linkSuggestion.lp!.id)
+      ? linkSuggestion.lp.id
+      : null;
+  const alpSuggestedAppliedId =
+    linkSuggestion?.alp &&
+    alpOptions.some((o) => o.id === linkSuggestion.alp!.id)
+      ? linkSuggestion.alp.id
+      : null;
+  useEffect(() => {
+    if (!eligible || !linkSuggestion) return;
+    if (initialLpId == null && lpId == null && lpSuggestedAppliedId) {
+      setLpId(lpSuggestedAppliedId);
+    }
+    if (
+      initialAlpId == null &&
+      alpId == null &&
+      alpSuggestedAppliedId &&
+      eligible.assistant_loco_pilots
+    ) {
+      setAlpId(alpSuggestedAppliedId);
+    }
+    // We intentionally exclude `lpId`/`alpId` from deps — this should fire
+    // only when eligibility (or the suggestion itself) changes, never as a
+    // reaction to the operator changing the dropdown back to empty.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eligible, linkSuggestion, lpSuggestedAppliedId, alpSuggestedAppliedId]);
 
   function save() {
     if (!target || !lpId || !eligible) return;
@@ -271,6 +314,25 @@ export function AssignCrewModal({
       {serverError ? (
         <Banner tone="error" title="Couldn't assign crew">
           {serverError}
+        </Banner>
+      ) : null}
+
+      {!serverError &&
+      !loading &&
+      eligible &&
+      linkSuggestion &&
+      (lpSuggestedAppliedId || alpSuggestedAppliedId) ? (
+        <Banner tone="info" title="Pre-filled from link roster">
+          {[
+            lpSuggestedAppliedId && linkSuggestion.lp
+              ? `LP ${linkSuggestion.lp.name} (${linkSuggestion.lp.linkName})`
+              : null,
+            alpSuggestedAppliedId && linkSuggestion.alp
+              ? `ALP ${linkSuggestion.alp.name} (${linkSuggestion.alp.linkName})`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </Banner>
       ) : null}
 

@@ -33,14 +33,24 @@ import type {
   AssignmentDraftStageInput,
   AssignmentRow,
   AssignmentUpdateInput,
+  AutoDraftResponse,
   CrewDiaryResponse,
   CrewRow,
   EligibleCrewResponse,
   LeaveCreateInput,
   LeaveRow,
   LeaveUpdateInput,
+  LinkCreateInput,
+  LinkMembershipCreateInput,
+  LinkMembershipRow,
+  LinkMembershipUpdateInput,
+  LinkProjectionRow,
+  LinkRow,
+  LinkUpdateInput,
   LocoPilotCreateInput,
   LocoPilotUpdateInput,
+  PrAssignmentRow,
+  PrAssignmentUpsertInput,
   SummaryResponse,
   TrainCreateInput,
   TrainRow,
@@ -380,6 +390,13 @@ export const assignmentDrafts = {
       `/api/assignment-drafts/commit?date=${encodeURIComponent(date)}`,
       { method: 'POST' },
     ).then((r) => { invalidateDrafts(); invalidateAssignments(); return r; }),
+
+  /** Auto-Draft from links (HLD §4.12 / Phase 3). Server upserts drafts and returns the per-train summary. */
+  auto: (date: string) =>
+    request<AutoDraftResponse>(
+      `/api/assignment-drafts/auto?date=${encodeURIComponent(date)}`,
+      { method: 'POST' },
+    ).then((r) => { invalidateDrafts(); return r; }),
 };
 
 // ---------------------------------------------------------------------------
@@ -449,4 +466,112 @@ export const summary = {
 
 export const health = {
   get: () => request<{ ok: true; dataDir: string }>('/api/health'),
+};
+
+// ---------------------------------------------------------------------------
+// Links  →  /api/links and /api/link-memberships
+// ---------------------------------------------------------------------------
+
+function invalidateLinks() {
+  cache.invalidate(`${API_BASE}/api/links`);
+  cache.invalidate(`${API_BASE}/api/link-memberships`);
+}
+
+function invalidateLinkMemberships() {
+  cache.invalidate(`${API_BASE}/api/links`);
+  cache.invalidate(`${API_BASE}/api/link-memberships`);
+}
+
+export const links = {
+  list: () => request<LinkRow[]>('/api/links'),
+
+  /** Today's plan for every active membership on `date` (HLD §4.10 / Phase 2). */
+  projection: (date: string) =>
+    request<LinkProjectionRow[]>(
+      `/api/links/projection?date=${encodeURIComponent(date)}`,
+    ),
+
+  create: (input: LinkCreateInput) =>
+    request<LinkRow>('/api/links', {
+      method: 'POST',
+      jsonBody: input,
+    }).then((r) => { invalidateLinks(); return r; }),
+
+  update: (id: string, patch: LinkUpdateInput) =>
+    request<LinkRow>(`/api/links/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      jsonBody: patch,
+    }).then((r) => { invalidateLinks(); return r; }),
+
+  archive: (id: string) =>
+    request<void>(`/api/links/${encodeURIComponent(id)}/archive`, {
+      method: 'POST',
+    }).then((r) => { invalidateLinks(); return r; }),
+};
+
+export const linkMemberships = {
+  /**
+   * @param linkId    Optional — narrow to one link's roster.
+   * @param asOfDate  Optional `YYYY-MM-DD` — when set, each row carries a
+   *                  resolved `positionOnAsOfDate`.
+   */
+  list: (params: { linkId?: string; asOfDate?: string } = {}) => {
+    const search = new URLSearchParams();
+    if (params.linkId) search.set('linkId', params.linkId);
+    if (params.asOfDate) search.set('asOfDate', params.asOfDate);
+    const qs = search.toString();
+    return request<LinkMembershipRow[]>(
+      qs ? `/api/link-memberships?${qs}` : '/api/link-memberships',
+    );
+  },
+
+  create: (input: LinkMembershipCreateInput) =>
+    request<LinkMembershipRow>('/api/link-memberships', {
+      method: 'POST',
+      jsonBody: input,
+    }).then((r) => { invalidateLinkMemberships(); return r; }),
+
+  update: (id: string, patch: LinkMembershipUpdateInput) =>
+    request<LinkMembershipRow>(`/api/link-memberships/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      jsonBody: patch,
+    }).then((r) => { invalidateLinkMemberships(); return r; }),
+
+  archive: (id: string) =>
+    request<void>(`/api/link-memberships/${encodeURIComponent(id)}/archive`, {
+      method: 'POST',
+    }).then((r) => { invalidateLinkMemberships(); return r; }),
+};
+
+// ---------------------------------------------------------------------------
+// PR Assignments  ->  /api/pr-assignments
+// ---------------------------------------------------------------------------
+
+function invalidatePrAssignments() {
+  cache.invalidate(`${API_BASE}/api/pr-assignments`);
+}
+
+export const prAssignments = {
+  list: (date: string) =>
+    request<PrAssignmentRow[]>(
+      `/api/pr-assignments?date=${encodeURIComponent(date)}`,
+    ),
+
+  upsert: (input: PrAssignmentUpsertInput) =>
+    request<PrAssignmentRow>('/api/pr-assignments', {
+      method: 'PUT',
+      jsonBody: input,
+    }).then((r) => { invalidatePrAssignments(); return r; }),
+
+  remove: (params: { linkId: string; positionNumber: number; runDate: string }) => {
+    const search = new URLSearchParams({
+      linkId: params.linkId,
+      positionNumber: String(params.positionNumber),
+      runDate: params.runDate,
+    });
+    return request<void>(
+      `/api/pr-assignments?${search.toString()}`,
+      { method: 'DELETE' },
+    ).then((r) => { invalidatePrAssignments(); return r; });
+  },
 };

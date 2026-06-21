@@ -20,11 +20,15 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import { CachedTableStore } from '../persistence/cachedTableStore';
+
 import { CsvAssignmentDraftRepo } from '../persistence/csvAssignmentDraftRepo';
 import { CsvAssignmentRepo } from '../persistence/csvAssignmentRepo';
 import { CsvAssistantLocoPilotRepo } from '../persistence/csvAssistantLocoPilotRepo';
 import { CsvLeaveRepo } from '../persistence/csvLeaveRepo';
+import { CsvLinkMembershipRepo } from '../persistence/csvLinkMembershipRepo';
+import { CsvLinkRepo } from '../persistence/csvLinkRepo';
 import { CsvLocoPilotRepo } from '../persistence/csvLocoPilotRepo';
+import { CsvPrAssignmentRepo } from '../persistence/csvPrAssignmentRepo';
 import { CsvTrainRepo } from '../persistence/csvTrainRepo';
 import { CsvTableStore } from '../persistence/csvTableStore';
 import { SheetsTableStore } from '../persistence/sheetsTableStore';
@@ -38,7 +42,10 @@ import { createAssistantLocoPilotsRouter } from './assistantLocoPilots';
 import { createCrewDiaryRouter } from './crewDiary';
 import { errorMiddleware } from './errorMiddleware';
 import { createLeavesRouter } from './leaves';
+import { createLinkMembershipsRouter } from './linkMemberships';
+import { createLinksRouter } from './links';
 import { createLocoPilotsRouter } from './locoPilots';
+import { createPrAssignmentsRouter } from './prAssignments';
 import { createSummaryRouter } from './summary';
 import { createTrainsRouter } from './trains';
 
@@ -95,9 +102,12 @@ const alps = new CsvAssistantLocoPilotRepo(store);
 const assignments = new CsvAssignmentRepo(store);
 const leaves = new CsvLeaveRepo(store);
 const drafts = new CsvAssignmentDraftRepo(store);
+const links = new CsvLinkRepo(store);
+const linkMemberships = new CsvLinkMembershipRepo(store);
+const prAssignments = new CsvPrAssignmentRepo(store);
 
 const repoDeps = { trains, lps, alps, assignments, leaves };
-const draftDeps = { drafts, ...repoDeps };
+const draftDeps = { drafts, ...repoDeps, links, linkMemberships };
 
 // ---------------------------------------------------------------------------
 // App
@@ -138,6 +148,9 @@ export function createApp(): express.Express {
   app.use('/api/assignment-drafts',       createAssignmentDraftsRouter(draftDeps));
   app.use('/api/eligible-crew',           createEligibleCrewRouter(repoDeps));
   app.use('/api/leaves',                  createLeavesRouter({ leaves, lps, alps }));
+  app.use('/api/links',                   createLinksRouter({ links, linkMemberships, lps, alps }));
+  app.use('/api/link-memberships',        createLinkMembershipsRouter({ links, linkMemberships, lps, alps, trains }));
+  app.use('/api/pr-assignments',          createPrAssignmentsRouter({ prAssignments, links, linkMemberships, lps, alps }));
   app.use('/api/crew-diary',              createCrewDiaryRouter({ trains, lps, alps, assignments, leaves }));
   app.use('/api/summary',                 createSummaryRouter(repoDeps));
 
