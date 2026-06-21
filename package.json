@@ -38,5 +38,6 @@
   },
   "overrides": {
     "@types/mime": "file:./stubs/types-mime"
-  }
+  },
+  "packageManager": "pnpm@10.30.2"
 }
