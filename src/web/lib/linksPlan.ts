@@ -7,7 +7,7 @@
 // Scope rules (matches the orchestrator):
 //   - Plan covers OUTWARD DUTY trains only. Inward LP/ALP is derived
 //     on-the-fly from its paired outward and is not stored.
-//   - `lpId`, `alpId`, `alpId2` may each be null \u2014 the operator can
+//   - `lpId`, `alpId`, `alpId2` may each be null — the operator can
 //     leave any combination empty (no LP-required-first rule on the
 //     client; validation runs on sync).
 //   - `origin` distinguishes rotation-seeded slots from operator-placed
@@ -141,6 +141,47 @@ export function pruneOldPlans(maxAgeDays = 30): void {
       }
     }
     for (const k of toRemove) window.localStorage.removeItem(k);
+  } catch {
+    // ignore
+  }
+}
+
+// One-shot migration: rotation-based slot prefill was removed, so any
+// pre-existing browser-local plan slots (and PR overrides) carried over
+// from that era should be wiped on first load. Gated by a version flag
+// so the wipe runs exactly once per browser.
+const SLOT_RESET_FLAG = 'rpms.linksPlan.rotationDisabledResetV1';
+export function resetAllPlanSlotsOnce(): void {
+  try {
+    if (window.localStorage.getItem(SLOT_RESET_FLAG) === 'done') return;
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key || !key.startsWith(STORAGE_PREFIX)) continue;
+      try {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as Partial<LinksPlan>;
+        if (!parsed || typeof parsed !== 'object') continue;
+        const next: LinksPlan = {
+          runDate: typeof parsed.runDate === 'string' ? parsed.runDate : '',
+          slots: {},
+          prSlots: {},
+          hiddenPrCrewIds: Array.isArray(parsed.hiddenPrCrewIds)
+            ? parsed.hiddenPrCrewIds.filter((s): s is string => typeof s === 'string')
+            : [],
+          updatedAt: new Date().toISOString(),
+        };
+        if (!next.runDate) {
+          window.localStorage.removeItem(key);
+          continue;
+        }
+        window.localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        // Bad JSON — just drop the entry.
+        window.localStorage.removeItem(key);
+      }
+    }
+    window.localStorage.setItem(SLOT_RESET_FLAG, 'done');
   } catch {
     // ignore
   }
@@ -532,6 +573,7 @@ export function useLinksPlan(runDate: string): UseLinksPlanResult {
 
   // Prune stale storage entries once per mount.
   useEffect(() => {
+    resetAllPlanSlotsOnce();
     pruneOldPlans();
   }, []);
 

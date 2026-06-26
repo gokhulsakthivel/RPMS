@@ -44,7 +44,6 @@ import {
 
 import type { LinksPlanPrSlot, LinksPlanSlot } from '../../lib/linksPlan';
 import { prSlotKey } from '../../lib/linksPlan';
-import { useLinksBoardPrefs } from '../../lib/linksBoardPrefs';
 import { formatIst, formatIstTime } from '../../lib/time';
 import { describeApiError } from '../../lib/errors';
 import { findOutwardPair } from '../../../domain/linkPairing';
@@ -322,11 +321,11 @@ export function LinksBoard({
   const [activeDrag, setActiveDrag] = useState<DragCrew | null>(null);
   const toast = useToast();
 
-  // Browser-local pref. When false, the rotation projection is hidden
-  // from both the slot renderer and the rail's `taken` set, so every
-  // outward DUTY slot starts empty and the projected crew become
-  // draggable from the rail.
-  const { applyRotationDefaults, setApplyRotationDefaults } = useLinksBoardPrefs();
+  // Rotation-defaults feature is disabled: the rotation projection is
+  // never used to pre-fill slots or take crew off the rail. Operator
+  // assigns purely by drag-and-drop. Constant kept so dependent memos
+  // remain typed; their `if (applyRotationDefaults)` branches are dead.
+  const applyRotationDefaults = false;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -1010,7 +1009,11 @@ export function LinksBoard({
           return { lpId: planned.lpId, alpId: planned.alpId, alpId2: planned.alpId2 };
         }
         const a = assignmentByTrainId.get(trainId);
-        const rot = rotationByTrainId.get(trainId);
+        // Rotation projection is only folded into the seed when the
+        // rotation-defaults feature is enabled. With it disabled, an
+        // untouched train has no implicit crew, so dropping AASISH on
+        // ALP-2 must NOT drag the rotation's LP/ALP into the plan.
+        const rot = applyRotationDefaults ? rotationByTrainId.get(trainId) : undefined;
         // Merge live + rotation so a partial patch (e.g. nulling LP)
         // doesn't accidentally drop a rotation-projected ALP. The live
         // assignment wins when it has a crew for that role; rotation
@@ -1264,14 +1267,6 @@ export function LinksBoard({
       <header className="links-board__header">
         <h2 className="links-board__title">Board · {date}</h2>
         <div className="links-board__header-controls">
-          <label className="links-board__toggle" title="When off, all outward slots start empty so you can drag and drop crew manually.">
-            <input
-              type="checkbox"
-              checked={applyRotationDefaults}
-              onChange={(e) => setApplyRotationDefaults(e.target.checked)}
-            />
-            <span>Use rotation defaults</span>
-          </label>
           <Legend />
         </div>
       </header>
@@ -1881,24 +1876,23 @@ function BoardCard({
           // from the PR row (the slot fill is the new home of truth).
           //
           // When `applyRotationDefaults` is off, the operator wants a
-          // blank canvas — suppress DUTY-row projections entirely. PR
-          // rows still surface their projected crew so the operator can
-          // see who's resting today, but those pills are advisory and
-          // already non-droppable.
+          // blank canvas — suppress BOTH DUTY-row and PR-row rotation
+          // projections entirely. Nothing is pre-filled; everything
+          // comes from the rail via drag-and-drop.
           const projectedLp =
-            pos.kind === 'PR' && rawProjectedLp && assignedCrewIds.has(rawProjectedLp.crewId)
+            !applyRotationDefaults
               ? undefined
-              : pos.kind === 'PR' && rawProjectedLp && hiddenPrCrewIds.has(rawProjectedLp.crewId)
+              : pos.kind === 'PR' && rawProjectedLp && assignedCrewIds.has(rawProjectedLp.crewId)
                 ? undefined
-                : pos.kind === 'DUTY' && !applyRotationDefaults
+                : pos.kind === 'PR' && rawProjectedLp && hiddenPrCrewIds.has(rawProjectedLp.crewId)
                   ? undefined
                   : rawProjectedLp;
           const projectedAlp =
-            pos.kind === 'PR' && rawProjectedAlp && assignedCrewIds.has(rawProjectedAlp.crewId)
+            !applyRotationDefaults
               ? undefined
-              : pos.kind === 'PR' && rawProjectedAlp && hiddenPrCrewIds.has(rawProjectedAlp.crewId)
+              : pos.kind === 'PR' && rawProjectedAlp && assignedCrewIds.has(rawProjectedAlp.crewId)
                 ? undefined
-                : pos.kind === 'DUTY' && !applyRotationDefaults
+                : pos.kind === 'PR' && rawProjectedAlp && hiddenPrCrewIds.has(rawProjectedAlp.crewId)
                   ? undefined
                   : rawProjectedAlp;
 

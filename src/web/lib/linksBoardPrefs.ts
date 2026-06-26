@@ -3,11 +3,11 @@
 // single key in `localStorage`; survives reloads across all run dates.
 //
 // Currently exposes one pref:
-//   - `applyRotationDefaults` — when false, the board renders every
-//     outward DUTY slot as empty and includes rotation-projected crew
-//     in the crew rail, so the operator assigns purely by drag-and-drop.
-//     When true (default), the rotation projection pre-fills slots and
-//     occupies those crew (today's behaviour).
+//   - `applyRotationDefaults` — when false (default), the board renders
+//     every outward DUTY slot as empty and includes rotation-projected
+//     crew in the crew rail, so the operator assigns purely by
+//     drag-and-drop. When true, the rotation projection pre-fills slots
+//     and occupies those crew.
 
 import { useCallback, useState } from 'react';
 
@@ -16,10 +16,10 @@ const STORAGE_KEY = 'rpms.linksBoard.applyRotationDefaults';
 function readPref(): boolean {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return true;
+    if (raw === null) return false;
     return raw === 'true';
   } catch {
-    return true;
+    return false;
   }
 }
 
