@@ -124,6 +124,7 @@ export function EditAssignmentModal({
     setEligible(null);
     setLpId(baselineLpId);
     setAlpId(baselineAlpId);
+    setAlpId2(baselineAlpId2);
 
     let cancelled = false;
     setLoading(true);

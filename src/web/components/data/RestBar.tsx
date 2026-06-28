@@ -11,8 +11,7 @@
 //     crew. The 0-hour edge resolves server-side (state flips to `available`).
 //   - All math is server-driven; the bar is a pure render of the `rest`
 //     payload from `CrewRow`.
-
-const MIN_REST_HOURS = 16;
+import { MIN_REST_HOURS } from '../../../domain/hasSufficientRest';
 
 export interface RestBarProps {
   /** From CrewRow.status — drives the color and label. */
