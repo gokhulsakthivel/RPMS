@@ -53,6 +53,7 @@ import { Banner } from '../feedback/Banner';
 import { EmptyState } from '../feedback/EmptyState';
 import { SkeletonRows } from '../feedback/SkeletonRows';
 import { useToast } from '../feedback/Toast';
+import { useLinksBoardPrefs } from '../../lib/linksBoardPrefs';
 
 // Compact IST formatter for rail meta lines \u2014 "19/Jun 14:30".
 // Full "19 Jun 2026, 14:30 IST" stays in the title tooltip.
@@ -326,6 +327,11 @@ export function LinksBoard({
   // assigns purely by drag-and-drop. Constant kept so dependent memos
   // remain typed; their `if (applyRotationDefaults)` branches are dead.
   const applyRotationDefaults = false;
+
+  // Right-side crew rail can be collapsed to a thin strip so the board
+  // gets near-full horizontal space when the operator is planning
+  // rotations rather than assigning crew. Persisted across reloads.
+  const { crewRailCollapsed, setCrewRailCollapsed } = useLinksBoardPrefs();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -1288,7 +1294,12 @@ export function LinksBoard({
       ) : null}
 
       {data ? (
-        <div className="links-board__body">
+        <div
+          className={
+            'links-board__body' +
+            (crewRailCollapsed ? ' links-board__body--rail-collapsed' : '')
+          }
+        >
           <div className="links-board__main">
             <div className="links-board__grid">
               {pairs.map((p) => (
@@ -1337,7 +1348,12 @@ export function LinksBoard({
             ) : null}
           </div>
           {railBuckets ? (
-            <CrewRail buckets={railBuckets} metaById={railBuckets.metaById} />
+            <CrewRail
+              buckets={railBuckets}
+              metaById={railBuckets.metaById}
+              collapsed={crewRailCollapsed}
+              onToggleCollapsed={() => setCrewRailCollapsed(!crewRailCollapsed)}
+            />
           ) : null}
         </div>
       ) : null}
@@ -1516,9 +1532,6 @@ function UnlinkedTrains({
                         <span className="links-board__leg-dest">{dest}</span>
                       </>
                     ) : null}
-                    <span className="links-board__train-name" title={t.name}>
-                      {t.name}
-                    </span>
                   </span>
                 </span>
               </span>
@@ -1537,7 +1550,7 @@ function UnlinkedTrains({
                       <CrewPill colorClass={lpClass} name={a.lp.name} assigned />
                     </DraggableCrew>
                   ) : (
-                    <span className="lb-pill lb-pill--empty">unassigned</span>
+                    <span className="lb-pill lb-pill--empty">vacant</span>
                   )}
                 </DroppableSlot>
               </span>
@@ -1563,7 +1576,7 @@ function UnlinkedTrains({
                         />
                       </DraggableCrew>
                     ) : (
-                      <span className="lb-pill lb-pill--empty">unassigned</span>
+                      <span className="lb-pill lb-pill--empty">vacant</span>
                     )}
                   </DroppableSlot>
                 )}
@@ -1589,12 +1602,16 @@ function bucketSetTotal(b: RailBucketSet): number {
 function CrewRail({
   buckets,
   metaById,
+  collapsed,
+  onToggleCollapsed,
 }: {
   buckets: {
     eligible: RailBucketSet;
     ineligible: RailBucketSet;
   };
   metaById: Map<string, { label: string; title: string }>;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   const total = bucketSetTotal(buckets.eligible) + bucketSetTotal(buckets.ineligible);
   // Rail itself is still a drop target — only the Eligible section
@@ -1608,6 +1625,7 @@ function CrewRail({
   const compatible = drag ? isCompatible(drag, railSlot) : false;
   const cls =
     'links-board__rail' +
+    (collapsed ? ' links-board__rail--collapsed' : '') +
     (drag
       ? compatible
         ? isOver
@@ -1615,11 +1633,78 @@ function CrewRail({
           : ' links-board__rail--accept'
         : ''
       : '');
+  // Collapsed: a vertical strip with a chevron to expand and one count
+  // chip per bucket tone. Clicking any chip expands the rail.
+  if (collapsed) {
+    const counts = {
+      mail:
+        buckets.eligible.mailLp.length + buckets.ineligible.mailLp.length,
+      passenger:
+        buckets.eligible.passengerLp.length +
+        buckets.ineligible.passengerLp.length,
+      alp: buckets.eligible.alp.length + buckets.ineligible.alp.length,
+    };
+    return (
+      <aside ref={setNodeRef} className={cls} aria-label="Crew (collapsed)">
+        <button
+          type="button"
+          className="links-board__rail-toggle"
+          onClick={onToggleCollapsed}
+          title={`Expand crew rail (${total})`}
+          aria-label={`Expand crew rail (${total} crew)`}
+          aria-expanded={false}
+        >
+          <span aria-hidden="true">‹</span>
+        </button>
+        <div className="links-board__rail-stack" aria-hidden="true">
+          <button
+            type="button"
+            className="links-board__rail-chip links-board__rail-chip--mail"
+            onClick={onToggleCollapsed}
+            title={`Mail LP — ${counts.mail}`}
+          >
+            <span className="links-board__rail-chip-label">LP</span>
+            <span className="links-board__rail-chip-count">{counts.mail}</span>
+          </button>
+          <button
+            type="button"
+            className="links-board__rail-chip links-board__rail-chip--passenger"
+            onClick={onToggleCollapsed}
+            title={`Passenger LP — ${counts.passenger}`}
+          >
+            <span className="links-board__rail-chip-label">LP</span>
+            <span className="links-board__rail-chip-count">
+              {counts.passenger}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="links-board__rail-chip links-board__rail-chip--alp"
+            onClick={onToggleCollapsed}
+            title={`ALP — ${counts.alp}`}
+          >
+            <span className="links-board__rail-chip-label">ALP</span>
+            <span className="links-board__rail-chip-count">{counts.alp}</span>
+          </button>
+        </div>
+      </aside>
+    );
+  }
   return (
     <aside ref={setNodeRef} className={cls} aria-label="Crew">
       <header className="links-board__rail-head">
         <h3 className="links-board__rail-title">Crew</h3>
         <span className="links-board__rail-count">{total}</span>
+        <button
+          type="button"
+          className="links-board__rail-toggle links-board__rail-toggle--inline"
+          onClick={onToggleCollapsed}
+          title="Collapse crew rail"
+          aria-label="Collapse crew rail"
+          aria-expanded={true}
+        >
+          <span aria-hidden="true">›</span>
+        </button>
       </header>
       <RailSection
         title="Eligible"
@@ -1699,7 +1784,7 @@ function UnassignedBucket({
   disabled: boolean;
 }) {
   return (
-    <section className="links-board__bucket">
+    <section className="links-board__bucket" data-tone={tone}>
       <header className="links-board__bucket-head">
         <span className={`lb-pill lb-pill--${tone}`}>
           {tone === 'alp' ? 'ALP' : 'LP'}
@@ -2138,7 +2223,7 @@ function BoardCard({
               assigned={lpResolved.assigned}
             />
           ) : (
-            <span className="lb-pill lb-pill--muted">—</span>
+            <span className="lb-pill lb-pill--empty">vacant</span>
           );
           const lpDragForPill = isDragSource ? (lpDrag ?? projectedLpDrag) : null;
           const lpPill =
@@ -2161,7 +2246,7 @@ function BoardCard({
                 assigned={alpResolved?.assigned ?? false}
               />
             ) : (
-              <span className="lb-pill lb-pill--muted">—</span>
+              <span className="lb-pill lb-pill--empty">vacant</span>
             );
           const alpDragForPill = isDragSource ? (alpDrag ?? projectedAlpDrag) : null;
           const alpPill =
@@ -2284,7 +2369,7 @@ function BoardCard({
                         </button>
                       </span>
                     ) : (
-                      <span className="lb-pill lb-pill--muted">—</span>
+                      <span className="lb-pill lb-pill--empty">vacant</span>
                     )}
                   </DroppableSlot>
                 ) : (
@@ -2337,7 +2422,7 @@ function BoardCard({
                         </button>
                       </span>
                     ) : (
-                      <span className="lb-pill lb-pill--muted">—</span>
+                      <span className="lb-pill lb-pill--empty">vacant</span>
                     )}
                   </DroppableSlot>
                 ) : (

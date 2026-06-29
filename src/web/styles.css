@@ -6,80 +6,122 @@
  * reference it via `var(--token-name)`.
  *
  * Theme: dark only.
+ * Visual direction: Linear / Vercel — restrained neutrals, single low-sat
+ * indigo accent, thin borders, tight numerics. Inter as the primary face.
  * -------------------------------------------------------------------------- */
 
 :root {
-  /* ---------- 3.1 Neutrals (dark theme) ------------------------------- */
-  --color-bg:              #0d1117;
-  --color-surface:         #161b22;
-  --color-surface-alt:     #1c222b;
-  --color-border:          #30363d;
-  --color-border-strong:   #4a5160;
-  --color-text:            #f0f6fc;
-  --color-text-muted:      #8b949e;
-  --color-text-disabled:   #6b7280;
+  /* ---------- 3.1 Neutrals (dark theme — Linear-ish) ------------------ */
+  --color-bg:              #08090a;
+  --color-surface:         #0e0f11;
+  --color-surface-alt:     #141518;
+  --color-surface-hover:   #18191c;
+  --color-border:          rgba(255, 255, 255, 0.07);
+  --color-border-strong:   rgba(255, 255, 255, 0.12);
+  --color-text:            #e6e6e6;
+  --color-text-strong:     #ffffff;
+  --color-text-secondary:  #b4b8bf;
+  --color-text-muted:      #8a8f98;
+  --color-text-disabled:   #5c6066;
+  /* Legacy alias kept for the Links board selectors (predate the new
+   * token names). New code MUST use --color-text-muted. */
+  --color-muted:           var(--color-text-muted);
 
   /* ---------- 3.2 Brand & Action -------------------------------------- */
-  --color-primary:         #3b82f6;
-  --color-primary-hover:   #2563eb;
-  --color-primary-soft:    #1f2a44;
+  /* Linear-style desaturated indigo, paired with a softer hover and an
+   * inset highlight for primary buttons (see .btn--primary below). */
+  --color-primary:         #5e6ad2;
+  --color-primary-hover:   #7170ff;
+  --color-primary-soft:    rgba(94, 106, 210, 0.16);
+  --color-focus-ring:      rgba(113, 112, 255, 0.45);
 
   /* ---------- 3.3 Crew Status (the rest clock) ------------------------ */
-  --status-available-bg:   #dcfce7;
-  --status-available-text: #166534;
-  --status-resting-bg:     #fee2e2;
-  --status-resting-text:   #991b1b;
+  --status-available-bg:   rgba(34, 197, 94, 0.14);
+  --status-available-text: #4ade80;
+  --status-resting-bg:     rgba(239, 68, 68, 0.14);
+  --status-resting-text:   #f87171;
   --rest-bar-ready:        #22c55e;
   --rest-bar-resting:      #ef4444;
-  --rest-bar-track:        #30363d; /* = --color-border, keep in sync */
+  --rest-bar-track:        rgba(255, 255, 255, 0.08);
 
   /* ---------- 3.4 Feedback -------------------------------------------- */
   --color-success:         #22c55e;
+  --color-success-soft:    rgba(34, 197, 94, 0.10);
   --color-warning:         #f59e0b;
+  --color-warning-soft:    rgba(245, 158, 11, 0.10);
   --color-danger:          #ef4444;
-  --color-danger-soft:     #3b1d20;
+  --color-danger-soft:     rgba(239, 68, 68, 0.10);
 
-  /* ---------- 3.5 Train Type Badges ----------------------------------- */
-  --accent-passenger-bg:    #dcfce7;
-  --accent-passenger-text:  #166534;
-  --accent-memu-bg:         #fef3c7;
-  --accent-memu-text:       #854d0e;
-  --accent-demu-bg:         #ccfbf1;
-  --accent-demu-text:       #115e59;
-  --accent-mail-express-bg: #dbeafe;
-  --accent-mail-express-text:#1e40af;
-  --accent-vande-bharat-bg: #ede9fe;
-  --accent-vande-bharat-text:#5b21b6;
-  --accent-amrit-bharat-bg: #fce7f3;
-  --accent-amrit-bharat-text:#9d174d;
+  /* ---------- 3.5 Train Type Badges (dark-theme tinted) -------------- */
+  /* Each badge = low-alpha tint on bg + bright text. Matches Linear's
+   * "label" treatment so the badges read as quiet metadata, not stickers. */
+  --accent-passenger-bg:    rgba(34, 197, 94, 0.14);
+  --accent-passenger-text:  #4ade80;
+  --accent-memu-bg:         rgba(245, 158, 11, 0.14);
+  --accent-memu-text:       #fbbf24;
+  --accent-demu-bg:         rgba(20, 184, 166, 0.14);
+  --accent-demu-text:       #2dd4bf;
+  --accent-mail-express-bg: rgba(94, 106, 210, 0.18);
+  --accent-mail-express-text:#a5b4fc;
+  --accent-vande-bharat-bg: rgba(168, 85, 247, 0.16);
+  --accent-vande-bharat-text:#c4b5fd;
+  --accent-amrit-bharat-bg: rgba(236, 72, 153, 0.16);
+  --accent-amrit-bharat-text:#f9a8d4;
 
   /* ---------- 3.6 Leave Type Badges (design.md §9.5) ----------------- */
-  /* Sick — warm red so it reads as "out unwell" at a glance. */
-  --accent-sick-bg:         #fee2e2;
-  --accent-sick-text:       #991b1b;
-  /* Planned leave — neutral slate, distinct from Sick / Training. */
-  --accent-leave-bg:        #e0e7ff;
-  --accent-leave-text:      #3730a3;
-  /* Training — amber, mirrors the "in development" tone. */
-  --accent-training-bg:     #fef3c7;
-  --accent-training-text:   #854d0e;
-  /* PR (Periodic Rest) — teal/cyan; distinct from the warmer SICK red
-     and the cooler LEAVE indigo so all four leave types are scannable
-     side-by-side on the calendar legend. */
-  --accent-pr-bg:           #cffafe;
-  --accent-pr-text:         #155e75;
+  --accent-sick-bg:         rgba(239, 68, 68, 0.14);
+  --accent-sick-text:       #f87171;
+  --accent-leave-bg:        rgba(99, 102, 241, 0.16);
+  --accent-leave-text:      #a5b4fc;
+  --accent-training-bg:     rgba(245, 158, 11, 0.14);
+  --accent-training-text:   #fbbf24;
+  --accent-pr-bg:           rgba(20, 184, 166, 0.14);
+  --accent-pr-text:         #2dd4bf;
 
-  /* ---------- Typography scale (design.md §2.1 references) ----------- */
-  --text-h1:      28px;
+  /* ---------- Typography scale --------------------------------------- */
+  --text-h1:      30px;
   --text-h2:      20px;
   --text-body:    14px;
   --text-caption: 12px;
+  --text-micro:   11px;
+
+  /* ---------- Radii -------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  /* ---------- Elevation ---------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.45);
+
+  /* ---------- Motion ------------------------------------------------- */
+  --ease-out: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 160ms;
 
   /* ---------- Layout constants --------------------------------------- */
-  --header-height: 48px;
+  --header-height: 52px;
   --tabbar-height: 44px;
-  --page-max-width: 1200px;
-  --page-pad: 24px;
+  --page-max-width: 1240px;
+  --page-pad: 28px;
+
+  /* ---------- Spacing scale (4-px base) ------------------------------ *
+   * Single source of truth for gaps, margins, and padding. New rules MUST
+   * pull from this scale instead of one-off pixel values so the vertical
+   * rhythm stays consistent across pages. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  /* Standard gap between major page sections (band → band, header → body).
+   * Kept as a named alias so future redesigns can retune in one place. */
+  --space-section: var(--space-6);
 
   color-scheme: dark;
 }
@@ -101,11 +143,21 @@ html, body, #root {
 body {
   background: var(--color-bg);
   color: var(--color-text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
   font-size: var(--text-body);
   line-height: 1.5;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+@supports (font-variation-settings: normal) {
+  body {
+    font-family: 'Inter var', 'Inter', -apple-system, BlinkMacSystemFont,
+      'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
 }
 
 button {
@@ -137,7 +189,7 @@ a:hover {
   min-height: 100%;
 }
 
-/* Header — 48px sticky bar with title left, version + date picker right. */
+/* Header — sticky bar with title left, version + date picker right. */
 .app-header {
   position: sticky;
   top: 0;
@@ -147,20 +199,23 @@ a:hover {
   justify-content: space-between;
   height: var(--header-height);
   padding: 0 var(--page-pad);
-  background: var(--color-surface);
+  background: rgba(8, 9, 10, 0.72);
+  backdrop-filter: saturate(140%) blur(10px);
+  -webkit-backdrop-filter: saturate(140%) blur(10px);
   border-bottom: 1px solid var(--color-border);
 }
 
 .app-header__brand {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
 }
 
 .app-header__title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.005em;
+  color: var(--color-text-strong);
 }
 
 .app-header__subtitle {
@@ -171,20 +226,21 @@ a:hover {
 .app-header__right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .app-header__version {
-  color: var(--color-text-muted);
-  font-size: var(--text-caption);
+  color: var(--color-text-disabled);
+  font-size: var(--text-micro);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
-/* Tab bar — outlined-pill nav */
+/* Tab bar — Linear/Vercel underline tabs */
 .tab-bar {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
+  gap: 4px;
   height: var(--tabbar-height);
   padding: 0 var(--page-pad);
   border-bottom: 1px solid var(--color-border);
@@ -192,16 +248,29 @@ a:hover {
 }
 
 .tab-bar__link {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  height: 30px;
-  padding: 0 14px;
-  border-radius: 8px;
-  border: 1.5px solid var(--color-border);
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
   color: var(--color-text-muted);
   font-size: var(--text-body);
   font-weight: 500;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  letter-spacing: -0.005em;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.tab-bar__link::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .tab-bar__link:hover {
@@ -209,18 +278,28 @@ a:hover {
 }
 
 .tab-bar__link[aria-selected='true'] {
-  background: var(--color-surface-alt);
-  border-color: var(--color-border-strong);
-  color: var(--color-text);
+  color: var(--color-text-strong);
 }
 
-/* Page container */
+.tab-bar__link[aria-selected='true']::after {
+  background: var(--color-text-strong);
+}
+
+.tab-bar__link:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -4px;
+  border-radius: var(--radius-sm);
+}
+
+/* Page container — vertical padding uses --space-section so the gap
+ * between the tab bar and the page header matches the gap between the
+ * page header and content. */
 .app-page {
   flex: 1 1 auto;
   width: 100%;
   max-width: var(--page-max-width);
   margin: 0 auto;
-  padding: var(--page-pad);
+  padding: var(--space-section) var(--page-pad);
 }
 /* Links page wants to spread wider — the board has 2-up cards plus a
  * sticky unassigned rail, and 1200px is too cramped. Use the full viewport. */
@@ -242,17 +321,24 @@ a:hover {
 
 .date-picker__input {
   height: 30px;
-  padding: 0 8px;
+  padding: 0 10px;
   background: var(--color-surface-alt);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-variant-numeric: tabular-nums;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.date-picker__input:hover {
+  border-color: var(--color-border-strong);
 }
 
 .date-picker__input:focus {
   outline: none;
-  border-color: var(--color-border-strong);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
 
 /* The native date-picker indicator is hard to read against a dark surface;
@@ -311,33 +397,49 @@ a:hover {
 /* ---------- PageHeader (components.md §4) -------------------------------- */
 .page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  margin: 4px 0 20px;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-section);
 }
 
 .page-header__copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .page-header__title {
   margin: 0;
   font-size: var(--text-h1);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
+  color: var(--color-text-strong);
 }
 
 .page-header__subtitle {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-body);
+  letter-spacing: -0.005em;
 }
 
 .page-header__action {
   flex: 0 0 auto;
+}
+
+/* Action clusters in page headers — unified across pages (Assignments uses
+   .page-header__actions, Links uses .links-page__head-actions). Single
+   rule, no inline-flow gaps, wraps gracefully on narrow widths. */
+.page-header__actions,
+.links-page__head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ---------- Button (primitives) ------------------------------------------ */
@@ -347,25 +449,47 @@ a:hover {
   justify-content: center;
   gap: 6px;
   height: 32px;
-  padding: 0 14px;
-  border-radius: 8px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  font-size: var(--text-body);
+  font-size: 13px;
   font-weight: 500;
+  letter-spacing: -0.005em;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease,
-    box-shadow 120ms ease;
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
   white-space: nowrap;
+  user-select: none;
 }
 
 .btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus-ring);
+}
+
+.btn:active:not([disabled]) {
+  transform: translateY(0.5px);
 }
 
 .btn[disabled] {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Disabled primary should not look "lit". Strip the inset highlight + ambient
+   shadow so a non-clickable CTA reads as a flat, dimmed surface. */
+.btn--primary[disabled] {
+  box-shadow: none;
+  filter: saturate(0.7);
+}
+
+/* Text-variant disabled reads as a quiet label, not a broken button. */
+.btn--text[disabled] {
+  opacity: 1;
+  color: var(--color-text-disabled);
 }
 
 .btn--default {
@@ -373,9 +497,10 @@ a:hover {
 }
 
 .btn--cta {
-  height: 40px;
-  padding: 0 18px;
-  font-size: 15px;
+  height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+  border-radius: var(--radius-md);
 }
 
 .btn--full {
@@ -386,6 +511,8 @@ a:hover {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .btn--primary:hover:not([disabled]) {
@@ -400,17 +527,21 @@ a:hover {
 }
 
 .btn--secondary:hover:not([disabled]) {
+  background: var(--color-surface-hover);
   border-color: var(--color-border-strong);
+  color: var(--color-text-strong);
 }
 
 .btn--danger {
   background: transparent;
-  border-color: var(--color-danger);
-  color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #f87171;
 }
 
 .btn--danger:hover:not([disabled]) {
   background: var(--color-danger-soft);
+  border-color: var(--color-danger);
+  color: #fca5a5;
 }
 
 .btn--text {
@@ -431,45 +562,71 @@ a:hover {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface-alt);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: 14px;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
-.icon-btn:hover {
-  color: var(--color-text);
-  border-color: var(--color-border-strong);
+.icon-btn:hover:not([disabled]) {
+  color: var(--color-text-strong);
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+}
+
+.icon-btn:active:not([disabled]) {
+  transform: translateY(0.5px);
+}
+
+.icon-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .icon-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-focus-ring);
 }
 
 /* ---------- Badge / Chip (primitives) ------------------------------------ */
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 22px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: var(--text-caption);
-  font-weight: 600;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-micro);
+  font-weight: 500;
+  letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
+}
+
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+  flex-shrink: 0;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 6px;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius-sm);
   background: var(--color-surface-alt);
   border: 1px solid var(--color-border);
   font-size: var(--text-caption);
@@ -477,11 +634,18 @@ a:hover {
 }
 
 .chip__role {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--color-text-muted);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 9.5px;
 }
 
 .chip__label {
@@ -493,21 +657,40 @@ a:hover {
 .select {
   width: 100%;
   height: 36px;
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-surface-alt);
-  color: var(--color-text);
+  color: var(--color-text-strong);
   font-size: var(--text-body);
   font-family: inherit;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  letter-spacing: -0.005em;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.input::placeholder {
+  color: var(--color-text-disabled);
+}
+
+.input:hover:not(:focus):not(:disabled),
+.select:hover:not(:focus):not(:disabled) {
+  border-color: var(--color-border-strong, rgba(255, 255, 255, 0.18));
 }
 
 .input:focus,
 .select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-soft);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+.input:disabled,
+.select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .input--invalid,
@@ -520,22 +703,36 @@ a:hover {
   box-shadow: 0 0 0 3px var(--color-danger-soft);
 }
 
-.input--datetime {
+.input--datetime,
+.input[type='time'],
+.input[type='date'],
+.input[type='datetime-local'] {
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
-.input--datetime::-webkit-calendar-picker-indicator {
-  filter: invert(0.8);
+.input::-webkit-calendar-picker-indicator,
+.input[type='time']::-webkit-calendar-picker-indicator,
+.input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(0.65);
+  opacity: 0.7;
   cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.input[type='time']:hover::-webkit-calendar-picker-indicator,
+.input[type='date']:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
 }
 
 .select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%238b949e' d='M6 8.5 1.5 4h9z'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10' fill='none'><path d='M2 4l3 3 3-3' stroke='%238a8f98' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding-right: 28px;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
 }
 
 /* ---------- FormField ---------------------------------------------------- */
@@ -547,14 +744,15 @@ a:hover {
 
 .form-field__label {
   font-size: var(--text-caption);
-  font-weight: 600;
-  color: var(--color-text);
-  letter-spacing: 0.02em;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  letter-spacing: -0.005em;
 }
 
 .form-field__required {
-  color: var(--color-danger);
+  color: var(--color-text-muted);
   margin-left: 2px;
+  font-weight: 400;
 }
 
 .form-field__hint {
@@ -574,25 +772,25 @@ a:hover {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   margin-bottom: 16px;
 }
 
 .banner--error {
-  border-color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.35);
   background: var(--color-danger-soft);
 }
 
 .banner--warning {
-  border-color: var(--color-warning);
-  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.35);
+  background: var(--color-warning-soft);
 }
 
 .banner--info {
-  border-color: var(--color-primary);
+  border-color: rgba(94, 106, 210, 0.35);
   background: var(--color-primary-soft);
 }
 
@@ -606,11 +804,13 @@ a:hover {
 .banner__title {
   margin: 0;
   font-weight: 600;
+  color: var(--color-text-strong);
+  letter-spacing: -0.005em;
 }
 
 .banner__body {
   font-size: var(--text-body);
-  color: var(--color-text);
+  color: var(--color-text-muted);
 }
 
 /* ---------- Toast (feedback) -------------------------------------------- */
@@ -683,27 +883,29 @@ a:hover {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 24px;
+  padding: 56px 24px;
   border: 1px dashed var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
-  gap: 8px;
+  gap: 10px;
 }
 
 .empty-state__icon {
-  font-size: 32px;
+  font-size: 28px;
   margin-bottom: 4px;
+  opacity: 0.7;
 }
 
 .empty-state__title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-strong);
+  letter-spacing: -0.01em;
 }
 
 .empty-state__desc {
-  margin: 0;
+  margin: 0 0 8px;
   font-size: var(--text-body);
   color: var(--color-text-muted);
   max-width: 420px;
@@ -713,100 +915,159 @@ a:hover {
 .skeleton {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 0;
+  gap: 1px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow: hidden;
 }
 
 .skeleton__row {
   display: flex;
-  gap: 12px;
+  gap: 14px;
+  padding: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.skeleton__row:last-child {
+  border-bottom: none;
 }
 
 .skeleton__cell {
   flex: 1 1 0;
-  height: 36px;
+  height: 14px;
   background: var(--color-surface-alt);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 /* ---------- Modal / ConfirmDialog (overlay) ----------------------------- */
+@keyframes modal-backdrop-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-panel-rise {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);     }
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(6, 7, 9, 0.62);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 100;
   padding: 24px;
+  animation: modal-backdrop-fade var(--dur-base) var(--ease-out);
 }
 
 .modal {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   width: 100%;
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 24px 60px -12px rgba(0, 0, 0, 0.6),
+    0 8px 24px -8px rgba(0, 0, 0, 0.45);
   overflow: hidden;
+  animation: modal-panel-rise var(--dur-base) var(--ease-out);
 }
 
-.modal--form { max-width: 480px; }
-.modal--assign { max-width: 560px; }
+.modal--form   { max-width: 520px; }
+.modal--assign { max-width: 580px; }
 
 .modal__head {
-  padding: 16px 20px 8px;
+  padding: 20px 24px 16px;
   border-bottom: 1px solid var(--color-border);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.015),
+    transparent
+  );
 }
 
 .modal__title {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
+  color: var(--color-text-strong);
+  letter-spacing: -0.01em;
 }
 
 .modal__subtitle {
   margin: 4px 0 0;
   font-size: var(--text-caption);
   color: var(--color-text-muted);
+  letter-spacing: -0.005em;
 }
 
 .modal__body {
-  padding: 16px 20px;
+  padding: 20px 24px 24px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.modal__body::-webkit-scrollbar {
+  width: 10px;
+}
+.modal__body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.modal__body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+  background-clip: padding-box;
 }
 
 .modal__foot {
-  padding: 12px 20px;
+  padding: 14px 24px;
   border-top: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
+/* In-form action row (used by TrainForm, CrewForm, LeaveForm — they keep
+   their submit + cancel inside the body for native form semantics). */
 .modal__actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
+  margin: 8px -24px -24px;
+  padding: 14px 24px;
   border-top: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  position: sticky;
+  bottom: -24px;
 }
 
 .confirm-dialog__body {
   margin: 0;
   font-size: var(--text-body);
   color: var(--color-text);
-  line-height: 1.55;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  text-wrap: pretty;
 }
 
 /* ---------- DataTable --------------------------------------------------- */
 .data-table {
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   overflow: hidden;
 }
@@ -825,21 +1086,30 @@ a:hover {
 }
 
 .data-table__th {
-  padding: 10px 12px;
-  font-size: var(--text-caption);
-  font-weight: 600;
+  padding: 10px 14px;
+  font-size: var(--text-micro);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--color-text-muted);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-alt);
+  background: transparent;
 }
 
 .data-table__td {
-  padding: 12px;
+  padding: 14px;
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
   font-size: var(--text-body);
+  color: var(--color-text);
+}
+
+.data-table tbody tr {
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .data-table tr:last-child .data-table__td {
@@ -852,7 +1122,7 @@ a:hover {
 
 .data-table-empty {
   border: 1px dashed var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   padding: 24px;
   text-align: center;
@@ -860,18 +1130,19 @@ a:hover {
 }
 
 /* ---------- RestBar (data) — design.md §6 ------------------------------- */
+
 .rest-bar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .rest-bar__track {
   position: relative;
-  width: 100px;
-  height: 6px;
+  width: 96px;
+  height: 4px;
   background: var(--rest-bar-track);
-  border-radius: 3px;
+  border-radius: 2px;
   overflow: hidden;
 }
 
@@ -880,7 +1151,8 @@ a:hover {
   top: 0;
   left: 0;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 2px;
+  transition: width var(--dur-base) var(--ease-out);
 }
 
 .rest-bar__fill--ready {
@@ -895,16 +1167,17 @@ a:hover {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
-  min-width: 28px;
-  text-align: right;
+  min-width: 32px;
+  text-align: left;
+  letter-spacing: -0.005em;
 }
 
 /* ---------- StatCard / SummaryCards (chrome) ---------------------------- */
 .summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-  padding: 16px var(--page-pad);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-5) var(--page-pad);
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
 }
@@ -919,40 +1192,51 @@ a:hover {
 .stat-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 14px;
+  gap: 6px;
+  padding: 14px 16px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.stat-card:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-alt);
 }
 
 .stat-card--warning {
-  border-color: var(--color-warning);
+  border-color: rgba(245, 158, 11, 0.35);
+  background: var(--color-warning-soft);
 }
 
 .stat-card--danger {
-  border-color: var(--color-danger);
+  border-color: rgba(239, 68, 68, 0.35);
+  background: var(--color-danger-soft);
 }
 
 .stat-card__label {
   margin: 0;
-  font-size: var(--text-caption);
+  font-size: var(--text-micro);
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
+  letter-spacing: 0.06em;
+  font-weight: 500;
 }
 
 .stat-card__value {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--color-text);
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--color-text-strong);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
 }
 
-.stat-card--warning .stat-card__value { color: var(--color-warning); }
-.stat-card--danger .stat-card__value { color: var(--color-danger); }
+.stat-card--warning .stat-card__value { color: #fbbf24; }
+.stat-card--danger .stat-card__value { color: #f87171; }
 
 .stat-card__hint {
   margin: 0;
@@ -964,22 +1248,30 @@ a:hover {
 .train-table__num {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--color-text-strong);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+  font-size: 13px;
 }
 
 .train-table__num-route {
   display: flex;
   flex-direction: column;
-  line-height: 1.3;
+  gap: 2px;
+  line-height: 1.25;
 }
 
 .train-table__num-route-route {
   color: var(--color-text-muted);
-  font-size: 0.85em;
+  font-size: var(--text-micro);
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
 .train-table__name {
   color: var(--color-text);
+  letter-spacing: -0.005em;
 }
 
 .train-table__route {
@@ -992,6 +1284,7 @@ a:hover {
 
 .train-table__arrow {
   color: var(--color-text-disabled);
+  font-size: 10px;
 }
 
 .train-table__inward-num {
@@ -1004,17 +1297,20 @@ a:hover {
 .train-table__time {
   display: flex;
   flex-direction: column;
+  gap: 2px;
   font-variant-numeric: tabular-nums;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .train-table__time-date {
   white-space: nowrap;
+  color: var(--color-text);
+  font-size: 13px;
 }
 
 .train-table__time-clock {
   color: var(--color-text-muted);
-  font-size: 0.85em;
+  font-size: var(--text-micro);
   white-space: nowrap;
 }
 
@@ -1025,19 +1321,26 @@ a:hover {
 }
 
 .train-table__crew-empty {
-  color: var(--color-danger);
-  font-size: var(--text-caption);
+  color: var(--color-text-disabled);
+  font-size: var(--text-micro);
+  font-style: italic;
 }
 
 .train-table__actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   justify-content: flex-end;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.data-table tbody tr:hover .train-table__actions {
+  opacity: 1;
 }
 
 .train-table__runs-on {
   display: inline-flex;
-  gap: 2px;
+  gap: 3px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1048,14 +1351,14 @@ a:hover {
   width: 18px;
   height: 18px;
   border-radius: 4px;
-  font-size: var(--text-caption);
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
 }
 
 .train-table__runs-on-day--on {
-  background: var(--color-accent-soft, rgba(0, 120, 255, 0.12));
-  color: var(--color-accent, #0078ff);
+  background: var(--color-primary-soft);
+  color: #a5b4fc;
 }
 
 .train-table__runs-on-day--off {
@@ -1066,7 +1369,7 @@ a:hover {
 .train-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .train-form__row {
@@ -1075,29 +1378,99 @@ a:hover {
   gap: 12px;
 }
 
+/* Day-of-week segmented control. Native checkbox is hidden; the label IS
+   the segment. Seven equal segments in a row, single 1px border around the
+   group (each segment owns left/right edges so adjacent borders collapse). */
+.train-form__day-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  padding: 3px;
+}
+
+.train-form__day {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: -0.005em;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.train-form__day > input[type='checkbox'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.train-form__day:hover:not(.train-form__day--on) {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.train-form__day--on {
+  background: var(--color-primary-soft);
+  color: var(--color-text-strong);
+  box-shadow: inset 0 0 0 1px rgba(113, 112, 255, 0.35);
+}
+
+.train-form__day > input[type='checkbox']:focus-visible + span {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.train-form__day > span {
+  pointer-events: none;
+}
+
 /* ---------- CrewTable / CrewGradeBadge / CrewEligibleForCell ----------- */
 .crew-table__name {
-  font-weight: 600;
-  color: var(--color-text);
+  font-weight: 500;
+  color: var(--color-text-strong);
+  letter-spacing: -0.005em;
 }
 
 .crew-table__role {
   display: inline-flex;
   align-items: center;
-  height: 20px;
+  height: 18px;
   padding: 0 6px;
-  border-radius: 4px;
-  background: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--color-border);
   color: var(--color-text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .crew-table__actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   justify-content: flex-end;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.data-table tbody tr:hover .crew-table__actions {
+  opacity: 1;
 }
 
 .crew-grade__none {
@@ -1110,62 +1483,108 @@ a:hover {
   gap: 4px;
   font-size: var(--text-caption);
   color: var(--color-text-muted);
+  letter-spacing: -0.005em;
 }
 
 /* ---------- CrewForm ---------------------------------------------------- */
 .crew-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
+/* Role picker (LP / ALP) — same segmented-control idiom as the Trains
+   day-of-week row, so the form vocabulary stays consistent. */
 .crew-form__role {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  padding: 3px;
 }
 
 .crew-form__role-opt {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface-alt);
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
   cursor: pointer;
   font-size: var(--text-body);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.crew-form__role-opt:hover:not(:has(input:checked)) {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.crew-form__role-opt:has(input:checked) {
+  background: var(--color-primary-soft);
+  color: var(--color-text-strong);
+  box-shadow: inset 0 0 0 1px rgba(113, 112, 255, 0.35);
 }
 
 .crew-form__role-opt input[type='radio'] {
-  accent-color: var(--color-primary);
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
 }
 
 .crew-form__role-locked {
   margin: 4px 0 0;
   font-size: var(--text-caption);
   color: var(--color-text-muted);
+  letter-spacing: -0.005em;
 }
 
 .crew-form__checks {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  padding: 6px;
   background: var(--color-surface-alt);
 }
 
 .crew-form__check {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
   font-size: var(--text-body);
+  color: var(--color-text);
   cursor: pointer;
+  letter-spacing: -0.005em;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.crew-form__check:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .crew-form__check input[type='checkbox'] {
   accent-color: var(--color-primary);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
 }
 
 .crew-form__signoff {
@@ -1179,6 +1598,7 @@ a:hover {
 }
 
 /* ---------- AssignmentTable -------------------------------------------- */
+
 .assign-table__train {
   display: flex;
   flex-direction: column;
@@ -1186,13 +1606,19 @@ a:hover {
 }
 
 .assign-table__num {
-  font-weight: 600;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-strong);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .assign-table__name {
   color: var(--color-text-muted);
   font-size: var(--text-caption);
+  letter-spacing: -0.005em;
 }
 
 /* Link/position hint shown under the train number on the Plan table. */
@@ -1210,6 +1636,8 @@ a:hover {
 .assign-table__time {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  color: var(--color-text-secondary);
+  letter-spacing: -0.005em;
 }
 
 .assign-table__crew {
@@ -1217,7 +1645,9 @@ a:hover {
 }
 
 .assign-table__crew--missing {
-  color: var(--color-danger);
+  color: var(--color-warning, #f59e0b);
+  font-weight: 500;
+  letter-spacing: -0.005em;
 }
 
 .assign-table__crew--na {
@@ -1227,31 +1657,46 @@ a:hover {
 
 .assign-table__actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   justify-content: flex-end;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.data-table tbody tr:hover .assign-table__actions {
+  opacity: 1;
 }
 
 /* ---------- AssignCrewModal -------------------------------------------- */
+/* Sub-header inside the dialog body — train badge + departure time. The
+   modal __head divider already separates header from body, so this row is
+   borderless and lives flush with the body padding. */
 .assign-modal__head {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
 }
 
 .assign-modal__time {
   font-size: var(--text-caption);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  margin-left: auto;
 }
 
 .assign-modal__loading {
   margin: 0;
-  padding: 16px 0;
+  padding: 24px 0;
   color: var(--color-text-muted);
   text-align: center;
+  font-size: var(--text-caption);
+  letter-spacing: -0.005em;
 }
 
 .assign-modal__no-alp {
@@ -1259,6 +1704,7 @@ a:hover {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
   font-style: italic;
+  letter-spacing: -0.005em;
 }
 
 /* Phase 4 — EditAssignmentModal suggestion banner with inline Apply button. */
@@ -1279,25 +1725,37 @@ a:hover {
 }
 
 /* ---------- Leaves: table cells (design.md §9.5) ----------------------- */
+
 .leave-table__crew {
   display: inline-flex;
   align-items: center;
 }
 .leave-table__date {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+  font-size: 12.5px;
   font-variant-numeric: tabular-nums;
-  color: var(--color-text);
+  color: var(--color-text-secondary);
+  letter-spacing: -0.005em;
 }
 .leave-table__reason {
-  color: var(--color-text);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
   word-break: break-word;
+  letter-spacing: -0.005em;
 }
 .leave-table__reason--empty {
-  color: var(--color-text-muted);
+  color: var(--color-text-disabled);
 }
 .leave-table__actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   justify-content: flex-end;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.data-table tbody tr:hover .leave-table__actions {
+  opacity: 1;
 }
 
 /* ---------- Leaves: form layout --------------------------------------- */
@@ -1306,33 +1764,82 @@ a:hover {
   flex-direction: column;
   gap: 16px;
 }
+
+/* Role picker (LP / ALP) — same segmented control as crew-form__role. */
 .leave-form__role {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  padding: 3px;
 }
+
 .leave-form__role-opt {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--text-body);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.leave-form__role-opt:hover:not(:has(input:checked)) {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.leave-form__role-opt:has(input:checked) {
+  background: var(--color-primary-soft);
+  color: var(--color-text-strong);
+  box-shadow: inset 0 0 0 1px rgba(113, 112, 255, 0.35);
+}
+
+.leave-form__role-opt input[type='radio'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
   cursor: pointer;
 }
+
 .leave-form__role-opt input[disabled] {
   cursor: not-allowed;
 }
+
+.leave-form__role-opt:has(input[disabled]) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .leave-form__role-locked {
   flex-basis: 100%;
   margin: 0;
   font-size: var(--text-caption);
   color: var(--color-text-muted);
   font-style: italic;
+  letter-spacing: -0.005em;
 }
+
 .leave-form__date-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 12px;
 }
+
 .leave-form__crew-error {
   margin: -8px 0 0;
   font-size: var(--text-caption);
@@ -1340,10 +1847,11 @@ a:hover {
 }
 
 /* ---------- Crew Diary tab (design.md §9.6) ------------------------------ */
+
 .crew-diary-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 24px;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
   margin-top: 16px;
   align-items: start;
 }
@@ -1356,7 +1864,7 @@ a:hover {
 
 .crew-diary-sidebar {
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   display: flex;
   flex-direction: column;
@@ -1367,21 +1875,26 @@ a:hover {
 .crew-diary-sidebar__header {
   padding: 12px;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-alt);
+  background: transparent;
 }
 .crew-diary-sidebar__search {
   width: 100%;
   background: var(--color-bg);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   font-size: var(--text-body);
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.crew-diary-sidebar__search:hover {
+  border-color: var(--color-border-strong);
 }
 .crew-diary-sidebar__search:focus {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 1px;
+  outline: none;
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 .crew-diary-sidebar__list {
   list-style: none;
@@ -1403,39 +1916,42 @@ a:hover {
   font-size: var(--text-body);
   text-align: left;
   cursor: pointer;
-  transition: background-color 100ms ease;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 .crew-diary-sidebar__item:hover {
   background: var(--color-surface-alt);
 }
 .crew-diary-sidebar__item--selected {
   background: var(--color-primary-soft);
-  border-left: 3px solid var(--color-primary);
-  padding-left: 11px;
+  border-left: 2px solid var(--color-primary);
+  padding-left: 12px;
 }
 .crew-diary-sidebar__name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: -0.005em;
 }
 .crew-diary-sidebar__kind {
   flex-shrink: 0;
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: var(--text-caption);
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.crew-diary-sidebar__kind--lp {
-  background: var(--accent-mail-express-bg);
-  color: var(--accent-mail-express-text);
-}
+.crew-diary-sidebar__kind--lp,
 .crew-diary-sidebar__kind--alp {
-  background: var(--accent-vande-bharat-bg);
-  color: var(--accent-vande-bharat-text);
+  /* same outlined treatment for both — the column header already says "Role";
+   * differentiation by name (LP/ALP) is enough without color coding here. */
 }
 .crew-diary-sidebar__empty {
   margin: 16px;
@@ -1446,45 +1962,47 @@ a:hover {
 .crew-diary-main {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
 }
 .crew-diary-month-nav {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
 }
 .crew-diary-month-nav__label {
   flex: 1;
   font-size: var(--text-h2);
-  font-weight: 600;
-  color: var(--color-text);
+  font-weight: 500;
+  color: var(--color-text-strong);
   text-align: center;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Calendar grid ------------------------------------------------ */
 .crew-diary-calendar {
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   overflow: hidden;
 }
 .crew-diary-calendar__weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: var(--color-surface-alt);
+  background: transparent;
   border-bottom: 1px solid var(--color-border);
 }
 .crew-diary-calendar__weekday {
-  padding: 8px;
-  font-size: var(--text-caption);
-  font-weight: 600;
+  padding: 10px 8px;
+  font-size: var(--text-micro);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   color: var(--color-text-muted);
   text-align: center;
 }
@@ -1493,8 +2011,8 @@ a:hover {
   grid-template-columns: repeat(7, 1fr);
 }
 .crew-diary-calendar__cell {
-  min-height: 84px;
-  padding: 6px;
+  min-height: 96px;
+  padding: 8px;
   border-right: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
   display: flex;
@@ -1507,7 +2025,7 @@ a:hover {
 }
 .crew-diary-calendar__cell--pad {
   background: var(--color-bg);
-  min-height: 84px;
+  min-height: 96px;
 }
 .crew-diary-calendar__cell--has {
   background: var(--color-primary-soft);
@@ -1515,33 +2033,40 @@ a:hover {
 .crew-diary-calendar__day {
   font-size: var(--text-caption);
   color: var(--color-text-muted);
-  font-weight: 600;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
 }
 .crew-diary-calendar__cell--has .crew-diary-calendar__day {
-  color: var(--color-text);
+  color: var(--color-text-strong);
 }
 .crew-diary-calendar__badge {
   background: var(--color-surface-alt);
   border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-primary);
-  border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 11px;
-  line-height: 1.3;
+  border-left: 2px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: var(--text-micro);
+  line-height: 1.35;
   display: flex;
   flex-direction: column;
   gap: 1px;
   overflow: hidden;
 }
 .crew-diary-calendar__badge-num {
-  font-weight: 600;
-  color: var(--color-text);
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+  font-weight: 500;
+  color: var(--color-text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 .crew-diary-calendar__badge-route {
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.005em;
 }
 
 /* ---------- Crew Diary table cells -------------------------------------- */
@@ -1582,11 +2107,11 @@ a:hover {
 
 .crew-diary-calendar__leave-badge {
   display: inline-block;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -1596,22 +2121,18 @@ a:hover {
 .crew-diary-calendar__leave-badge--sick {
   background: var(--accent-sick-bg);
   color: var(--accent-sick-text);
-  border-color: var(--accent-sick-text);
 }
 .crew-diary-calendar__leave-badge--leave {
   background: var(--accent-leave-bg);
   color: var(--accent-leave-text);
-  border-color: var(--accent-leave-text);
 }
 .crew-diary-calendar__leave-badge--training {
   background: var(--accent-training-bg);
   color: var(--accent-training-text);
-  border-color: var(--accent-training-text);
 }
 .crew-diary-calendar__leave-badge--pr {
   background: var(--accent-pr-bg);
   color: var(--accent-pr-text);
-  border-color: var(--accent-pr-text);
 }
 
 /* ---------- Crew Diary calendar legend --------------------------------- */
@@ -1707,32 +2228,63 @@ a:hover {
   color: var(--color-muted, #888);
 }
 .link-table__actions {
-  display: inline-flex;
+  display: flex;
   gap: 4px;
+  justify-content: flex-end;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+.data-table tbody tr:hover .link-table__actions {
+  opacity: 1;
 }
 
 .link-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 .link-form__positions {
   width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
   font-size: 12.5px;
-  line-height: 1.45;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border, #d0d4da);
-  border-radius: 6px;
-  background: var(--color-input-bg, #fff);
+  line-height: 1.55;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  color: var(--color-text-strong);
   resize: vertical;
-  min-height: 200px;
+  min-height: 220px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
+.link-form__positions:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+.link-form__positions::placeholder {
+  color: var(--color-text-disabled);
+}
+
+/* Actions row inside LinkForm — mirrors the .modal__actions sticky bar
+   used by Train/Crew/Leave forms so the chrome stays consistent. */
 .link-form__actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 8px;
+  margin: 8px -24px -24px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  position: sticky;
+  bottom: -24px;
 }
 
 .memberships-panel {
@@ -1797,23 +2349,24 @@ a:hover {
 .links-board {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 12px;
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin-bottom: 16px;
 }
 .links-board__header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .links-board__title {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--text-micro);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-muted, #888);
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
 }
 
 .links-board__header-controls {
@@ -1883,6 +2436,11 @@ a:hover {
   gap: 16px;
   align-items: start;
 }
+/* Collapsed rail mode — board reclaims most of the freed horizontal
+ * space; rail shrinks to a 56px strip of count chips + toggle. */
+.links-board__body--rail-collapsed {
+  grid-template-columns: minmax(0, 1fr) 56px;
+}
 .links-board__main {
   display: flex;
   flex-direction: column;
@@ -1890,7 +2448,8 @@ a:hover {
   min-width: 0;
 }
 @media (max-width: 1100px) {
-  .links-board__body {
+  .links-board__body,
+  .links-board__body--rail-collapsed {
     grid-template-columns: 1fr;
   }
 }
@@ -1902,56 +2461,198 @@ a:hover {
   top: 12px;
   max-height: calc(100vh - 24px);
   overflow-y: auto;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-alt);
 }
 .links-board__rail-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 8px;
 }
 .links-board__rail-title {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-micro);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-muted, #888);
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
 }
 .links-board__rail-count {
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: var(--color-muted, #888);
+  font-size: var(--text-micro);
+  color: var(--color-text-muted);
+  letter-spacing: -0.005em;
+  margin-left: auto;
+}
+/* Chevron button used to collapse / expand the rail. In expanded mode
+ * it sits inline in the rail head; in collapsed mode it's the top
+ * affordance of the vertical strip. */
+.links-board__rail-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.links-board__rail-toggle--inline {
+  /* The inline variant in the expanded head doesn't need to be as wide;
+   * the rail-head count sits next to it. */
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+}
+.links-board__rail-toggle:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.links-board__rail-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+/* Collapsed rail — vertical strip with the toggle on top, a hairline
+ * divider, and three tone-coloured count chips below. Clicking any
+ * chip re-expands. */
+.links-board__rail--collapsed {
+  padding: 10px 8px 12px;
+  gap: 10px;
+  align-items: center;
+  overflow: hidden;
+}
+.links-board__rail-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+.links-board__rail-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  height: 48px;
+  padding: 6px 0;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  transition: filter var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.links-board__rail-chip--mail {
+  background: #2952c0;
+  color: #fff;
+}
+.links-board__rail-chip--passenger {
+  background: #1f7a3a;
+  color: #fff;
+}
+.links-board__rail-chip--alp {
+  background: #e6b81e;
+  color: #1a1a1a;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+}
+.links-board__rail-chip:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+.links-board__rail-chip:active {
+  transform: translateY(0);
+}
+.links-board__rail-chip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.links-board__rail-chip-label {
+  opacity: 0.85;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.links-board__rail-chip-count {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 .links-board__bucket {
+  position: relative;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
-  padding: 8px 10px;
+  padding: 10px 12px 8px 14px;
+  overflow: hidden;
+}
+/* Tone accent — a 3px stripe down the left edge so each crew bucket reads
+ * as Mail / Passenger / ALP at a glance even when scrolled. Colours mirror
+ * the saturated board pills. */
+.links-board__bucket::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--bucket-accent, transparent);
+}
+.links-board__bucket[data-tone='mail'] {
+  --bucket-accent: #2952c0;
+}
+.links-board__bucket[data-tone='passenger'] {
+  --bucket-accent: #1f7a3a;
+}
+.links-board__bucket[data-tone='alp'] {
+  --bucket-accent: #e6b81e;
 }
 .links-board__bucket-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--color-border);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .links-board__bucket-title {
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: 500;
+  font-size: var(--text-caption);
+  color: var(--color-text);
   flex: 1;
+  letter-spacing: -0.005em;
 }
 .links-board__bucket-count {
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: var(--color-muted, #888);
+  font-size: var(--text-micro);
+  color: var(--color-text-muted);
+  letter-spacing: -0.005em;
 }
 .links-board__bucket-empty {
-  margin: 0;
-  font-size: 11px;
-  color: var(--color-muted, #888);
+  margin: 4px 0;
+  font-size: var(--text-micro);
+  color: var(--color-text-disabled);
   font-style: italic;
 }
 .links-board__bucket-list {
@@ -1964,14 +2665,44 @@ a:hover {
 .links-board__bucket-item {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  padding: 3px 0;
-  font-size: 12px;
-  flex-wrap: wrap;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
 .links-board__bucket-item + .links-board__bucket-item {
-  border-top: 1px dashed var(--color-border);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+.links-board__bucket-item:hover {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+.links-board__bucket-item .links-board__drag-handle {
+  cursor: grab;
+}
+.links-board__bucket-item .links-board__drag-handle:active {
+  cursor: grabbing;
+}
+.links-board__bucket-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--color-text);
+  letter-spacing: -0.005em;
+}
+.links-board__bucket-meta {
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  text-align: right;
+  flex-shrink: 0;
+  letter-spacing: 0;
 }
 /* Rail sections (Eligible / Ineligible). The Ineligible variant grays
  * out its contents and disables pointer interaction so the buckets
@@ -1989,10 +2720,11 @@ a:hover {
 }
 .links-board__rail-section-title {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--text-micro);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-muted, #888);
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
 }
 .links-board__rail-section--disabled {
   opacity: 0.55;
@@ -2071,19 +2803,6 @@ a:hover {
   cursor: grabbing;
   transform: rotate(-2deg);
 }
-.links-board__bucket-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.links-board__bucket-meta {
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  color: var(--color-muted, #888);
-  white-space: normal;
-  text-align: right;
-  flex-shrink: 0;
-}
 .links-board__unlinked {
   margin-top: 16px;
   padding: 10px 12px;
@@ -2117,17 +2836,9 @@ a:hover {
   font-size: 11px;
   color: var(--color-muted, #888);
 }
-.links-board__train-name {
-  margin-left: 6px;
-  color: var(--color-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11.5px;
-}
 .links-board__card {
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-surface-alt);
   overflow: hidden;
 }
@@ -2135,18 +2846,22 @@ a:hover {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 8px 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
 }
 .links-board__card-title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-micro);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+  color: var(--color-text);
 }
 .links-board__card-meta {
-  font-size: 11px;
-  color: var(--color-muted, #888);
+  font-size: var(--text-micro);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
 }
 .links-board__rows {
   display: flex;
@@ -2161,6 +2876,12 @@ a:hover {
   font-size: 12px;
   min-height: 24px;
   border-top: 1px solid var(--color-border);
+}
+/* The unlinked-trains card uses the position column to show the train's
+ * departure time (e.g. `19:45 IST`) instead of a one- or two-digit
+ * rotation index, so it needs a wider first column. */
+.links-board__card--unlinked .links-board__row {
+  grid-template-columns: 68px minmax(140px, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 .links-board__row:first-child {
   border-top: none;
@@ -2181,6 +2902,8 @@ a:hover {
   text-align: right;
   color: var(--color-muted, #888);
   font-size: 11px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
 }
 .links-board__trains {
   display: inline-flex;
@@ -2188,52 +2911,83 @@ a:hover {
   gap: 4px;
   min-width: 0;
 }
+/* A chain of train segments renders as a SINGLE pill (matching the depot
+ * board where one rotation slot is one sticker). The outer `__train-list`
+ * owns the pill chrome — rounded shell, height, font, drop shadow — and
+ * the inner `__leg` segments only paint their background colour. Adjacent
+ * segments butt up against each other so the colour change (bright red →
+ * dark red) reads as a single divided pill. */
 .links-board__train-list {
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
   min-width: 0;
-  flex-wrap: wrap;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #fff;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  /* No max-width / no wrap — a chained pill must stay one piece. The
+   * outer `__trains` cell already provides min-width: 0 so this can ellipsise
+   * if the row is squeezed. */
 }
-/* One leg = a single glanceable token: `13351 → ERS`. Color encodes
- * direction; outward is intentionally dull, inward stands out, conti is
- * the muted continuation. */
+/* A single segment inside the merged pill. No radius / no shadow — the
+ * outer shell owns those. Interior segments use tighter padding so the
+ * colour seam between two segments reads as a clean split rather than a
+ * wide empty band. The first and last segments get extra padding to give
+ * the pill its rounded shoulders some breathing room.
+ *
+ * `flex-shrink: 0` is critical: without it, a long chain (5+ segments)
+ * lets every flex child compress, which hides the destination text behind
+ * the next segment. Keeping each leg at its natural width means long
+ * chains overflow the cell and are clipped at the right edge — every
+ * *visible* segment still shows its full `{number} → {dest}` content. */
 .links-board__leg {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-width: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  line-height: 1.4;
+  flex-shrink: 0;
+  padding: 0 6px;
+  color: #fff;
+  background: #c83a2c;
+  white-space: nowrap;
+}
+.links-board__leg:first-child {
+  padding-left: 10px;
+}
+.links-board__leg:last-child {
+  padding-right: 10px;
 }
 .links-board__leg-num {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .links-board__leg-arrow {
-  opacity: 0.55;
+  opacity: 0.7;
   font-weight: 400;
 }
 .links-board__leg-dest {
   letter-spacing: 0.02em;
+  opacity: 0.95;
 }
 .links-board__leg--outward {
-  color: #f1f5f9;            /* slate-100 — bright, dominant */
-  background: rgba(148, 163, 184, 0.10);
-}
-.links-board__leg--inward {
-  color: #64748b;            /* slate-500 — disabled-button feel */
-  background: rgba(100, 116, 139, 0.08);
-  border: 1px solid rgba(100, 116, 139, 0.25);
-  opacity: 0.7;
+  /* Active depot-leaving leg — bright board red. */
+  background: #c83a2c;
 }
 .links-board__leg--conti {
-  color: #94a3b8;            /* slate-400 */
+  /* Continuation of an outward trip — same hue, slightly muted so the
+   * leading outward leg still reads as the head. */
+  background: #a4301f;
+}
+.links-board__leg--inward {
+  /* Returning leg — deep maroon. The colour change at the segment seam
+   * is the only cue an operator needs to see “this is where the rotation
+   * turns around”. Row-level dim still applies to fully-inward-led rows. */
+  background: #7a1d15;
 }
 /* When the row's first segment is inward, dim the LP/ALP pills too so
  * the whole row reads as the "returning" (already-resolved) side.
@@ -2264,10 +3018,11 @@ a:hover {
   min-width: 0;
 }
 .links-board__seg-join {
-  font-size: 11px;
-  color: var(--color-muted, #9ca3af);
-  opacity: 0.7;
-  padding: 0 1px;
+  /* The “→” that bridges two segments. Sits at the start of every leg
+   * after the first; rendered in white so the bridge reads as continuous
+   * across the colour seam. */
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 400;
 }
 .links-board__train-dest {
   font-size: 11px;
@@ -2303,78 +3058,149 @@ a:hover {
   width: 100%;
 }
 
-/* Tags & pills shared by the board */
+/* Tags & pills shared by the board.
+ *
+ * Visual goal: mirror the depot's physical roster board where each crew /
+ * train sticker is a saturated, single-color pill (Red = train, Blue = LP
+ * Mail, Green = LP Passenger, Yellow = ALP, with dark text on yellow).
+ * Geometry is unified across both families (`.lb-tag` for codes,
+ * `.lb-pill` for crew) so a row reads as a single pill rhythm regardless
+ * of which token rendered it. */
+
 .lb-tag {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 10.5px;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.02em;
-  line-height: 1.4;
+  line-height: 1;
+  white-space: nowrap;
 }
 .lb-tag--train {
-  background: #b91c1c;
+  background: #c83a2c;
   color: #fff;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
 .lb-tag--off {
-  background: #4b5563;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 .lb-tag--pr {
-  background: #92400e;
-  color: #fde68a;
+  background: #c83a2c;
+  color: #fff;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
 .lb-pill {
   display: inline-flex;
   align-items: center;
   max-width: 100%;
-  padding: 2px 8px;
+  height: 22px;
+  padding: 0 10px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1;
+  letter-spacing: 0.005em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
 }
 .lb-pill--mail {
-  background: #1d4ed8;
+  background: #2952c0;
   color: #fff;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.22);
 }
 .lb-pill--passenger {
-  background: #15803d;
+  background: #1f7a3a;
   color: #fff;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.22);
 }
 .lb-pill--alp {
-  background: #eab308;
-  color: #1f2937;
+  background: #e6b81e;
+  color: #1a1a1a;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
-.lb-pill--muted {
+.lb-pill--muted,
+.lb-pill--empty {
+  /* Both empty states share the dashed drop-spot silhouette so a row of
+   * empty cells reads as one consistent rhythm. `--empty` (live drop
+   * target) layers a `+` affordance and hover lift on top; `--muted`
+   * (`—` / `not required`, no drop possible) stays as a passive label. */
+  height: 22px;
   background: transparent;
-  color: var(--color-muted, #6b7280);
+  border: 1px dashed rgba(255, 255, 255, 0.10);
+  color: var(--color-text-muted);
   font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  justify-content: center;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
 }
 .lb-pill--empty {
-  background: transparent;
-  color: var(--color-muted, #6b7280);
-  font-weight: 500;
-  font-style: italic;
-  border: 1px dashed var(--color-border);
+  cursor: copy;
+}
+.lb-pill--empty::before {
+  content: '+';
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--color-text-disabled);
+  transform: translateY(-0.5px);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.links-board__slot:hover .lb-pill--empty,
+.lb-pill--empty:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--color-text-secondary);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+.links-board__slot:hover .lb-pill--empty::before,
+.lb-pill--empty:hover::before {
+  color: var(--color-text-secondary);
+}
+/* When a compatible drag is in flight the slot already shows its green
+ * accept ring — let the inner placeholder echo it so the drop zone reads
+ * as one continuous affordance, not two stacked outlines. */
+.links-board__slot--accept .lb-pill--empty {
+  border-color: rgba(34, 197, 94, 0.45);
+  color: var(--color-text);
+}
+.links-board__slot--accept .lb-pill--empty::before {
+  color: rgba(34, 197, 94, 0.85);
+}
+.links-board__slot--over-ok .lb-pill--empty {
+  border-color: transparent;
+  color: var(--color-text-strong);
+}
+.links-board__slot--over-bad .lb-pill--empty {
+  border-color: transparent;
+  color: var(--color-text-strong);
 }
 .lb-pill--assigned {
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.18) inset;
+  /* On a saturated pill, the extra inset highlight that used to mark
+   * "assigned" reads as noise. Keep the hook so JSX stays intact, but
+   * leave the base colour unmodified — the bottom shadow already gives
+   * the pill enough depth. */
 }
 .lb-pill__dot {
   display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: currentColor;
-  opacity: 0.85;
-  margin-right: 5px;
+  opacity: 0.45;
+  margin-right: 6px;
   vertical-align: middle;
 }
 
@@ -2384,40 +3210,45 @@ a:hover {
 .crew-table__link {
   display: inline-flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .crew-table__link--none {
-  color: var(--color-muted, #aaa);
+  color: var(--color-text-disabled);
+  font-variant-numeric: tabular-nums;
 }
 .crew-table__link-name {
-  font-size: 12px;
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 160px;
+  letter-spacing: -0.005em;
 }
 .crew-table__link-pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   width: fit-content;
+  font-variant-numeric: tabular-nums;
 }
 .crew-table__link-pill--duty {
-  background: var(--accent-training-bg, #e1f3ff);
-  color: var(--accent-training-text, #00557d);
+  background: rgba(94, 106, 210, 0.16);
+  color: #a5b4fc;
 }
 .crew-table__link-pill--off {
-  background: var(--accent-leave-bg, #eef2f6);
-  color: var(--accent-leave-text, #4a5566);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-muted);
 }
 .crew-table__link-pill--pr {
-  background: var(--accent-pr-bg, #fff2dc);
-  color: var(--accent-pr-text, #8a5a00);
+  background: rgba(20, 184, 166, 0.14);
+  color: #2dd4bf;
 }
 
 /* ----------------------------------------------------------------------------
@@ -2466,24 +3297,24 @@ a:hover {
   line-height: 1.55;
   border-radius: 3px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-weight: 500;
   vertical-align: middle;
 }
 .assign-table__dir--outward,
 .lb-dir--outward {
-  background: #dcfce7;  /* green-100 */
-  color: #14532d;       /* green-900 */
+  background: rgba(34, 197, 94, 0.14);
+  color: #4ade80;
 }
 .assign-table__dir--inward,
 .lb-dir--inward {
-  background: #fee2e2;  /* red-100 */
-  color: #7f1d1d;       /* red-900 */
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
 }
 .assign-table__dir--conti,
 .lb-dir--conti {
-  background: #f1f5f9;  /* slate-100 */
-  color: #475569;       /* slate-600 */
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-muted);
 }
 
 /* ---------- Periodic Rest section ------------------------------------- */
@@ -2509,6 +3340,6 @@ a:hover {
   border: 1px solid var(--color-border);
 }
 .badge--info {
-  background: #dbeafe;  /* blue-100 */
-  color: #1e3a8a;       /* blue-900 */
+  background: rgba(94, 106, 210, 0.16);
+  color: #a5b4fc;
 }
